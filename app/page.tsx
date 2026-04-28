@@ -1,122 +1,121 @@
+"use client";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Search, Bed, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Bed, User } from "lucide-react";
 
 export default function Home() {
+  const [selectedRoom, setSelectedRoom] = useState("");
+
   const rooms = [
-    { id: "N01", name: "Luxzy Room", price: "500,000", img: "/room.png" },
+    { id: "N01", name: "Luxzy Room",  price: "500,000", img: "/room.png" },
     { id: "N02", name: "Cenima Room", price: "700,000", img: "/room.png" },
-    { id: "N03", name: "Luxzy Room", price: "500,000", img: "/room.png" },
+    { id: "N03", name: "Luxzy Room",  price: "500,000", img: "/room.png" },
     { id: "N04", name: "Cenima Room", price: "700,000", img: "/room.png" },
   ];
 
   return (
-    <main className="min-h-screen bg-white">
-      {/* --- Hero Section --- */}
-      <section className="relative h-[650px] w-full text-white">
+    <main className="min-h-screen bg-white font-lao">
+      {/* Hero Section */}
+      <section className="relative h-[400px] w-full text-white">
         <div className="absolute inset-0 z-0">
-          <Image 
-            src="/pic.png" 
-            alt="Resort Background" 
-            fill 
-            className="object-cover"
-            priority
-          />
+          <Image src="/pic.png" alt="BG" fill className="object-cover" priority />
+          <div className="absolute inset-0 bg-black/25" />
         </div>
 
         {/* Navbar */}
-        <nav className="relative z-20 flex justify-end p-6">
-          <Link href="/login">
-            <button className="bg-slate-900/80 hover:bg-slate-800 px-5 py-2 rounded-lg flex items-center gap-2 text-sm border border-white/20 transition-all">
-              Sign In <User size={16} />
+        <nav className="relative z-50 flex justify-end p-3 container mx-auto">
+          <div className="relative group">
+            <button className="bg-slate-900/80 hover:bg-slate-800 px-4 py-1.5 rounded-md flex items-center gap-2 text-[11px] border border-white/20 transition-all">
+              Sign In <User size={12} />
             </button>
-          </Link>
+            <div className="absolute right-0 mt-1 w-36 bg-white rounded-lg shadow-xl border border-gray-100 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50">
+              <Link href="/login" className="block px-4 py-2 text-[12px] text-gray-700 hover:bg-blue-50 hover:text-blue-600 font-medium">
+                Login
+              </Link>
+              <div className="h-[1px] bg-gray-100 mx-2 my-1" />
+              <Link href="/register" className="block px-4 py-2 text-[12px] text-gray-700 hover:bg-blue-50 hover:text-blue-600 font-medium">
+                Sign Up
+              </Link>
+            </div>
+          </div>
         </nav>
 
-        {/* Title */}
-        <div className="relative z-20 container mx-auto px-12 mt-24">
-          <h1 className="text-7xl font-bold leading-tight drop-shadow-2xl">
+        <div className="relative z-20 container mx-auto px-6 mt-8">
+          <h1 className="text-4xl font-bold leading-tight">
             Resort Mai Son De <br /> Nong Khiw
           </h1>
         </div>
 
         {/* Search Bar */}
-        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 z-30 w-full max-w-6xl px-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 flex flex-wrap items-end gap-6 text-gray-700 border border-gray-100">
-            <div className="flex-1 min-w-[200px]">
-              <p className="text-[10px] font-bold uppercase text-gray-400 mb-2">ຈອງຫ້ອງ</p>
-              <select className="w-full p-2 border-b-2 border-gray-100 focus:outline-none focus:border-blue-500 text-sm">
-                <option>ເລືອກຫ້ອງ</option>
+        <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-4">
+          <div className="bg-white rounded-lg shadow-lg p-3 flex flex-wrap items-end gap-3 text-gray-700 border border-gray-100">
+
+            {/* ✅ ເລືອກຫ້ອງ */}
+            <div className="flex-1 min-w-[120px]">
+              <p className="text-[8px] font-bold text-gray-400 mb-0.5 uppercase">ຈອງຫ້ອງ</p>
+              <select
+                value={selectedRoom}
+                onChange={(e) => setSelectedRoom(e.target.value)}
+                className="w-full p-1 border-b text-[11px] bg-transparent outline-none cursor-pointer"
+              >
+                <option value="">ເລືອກຫ້ອງ</option>
+                <option value="Luxzy Room">Luxzy Room</option>
+                <option value="Cenima Room">Cenima Room</option>
               </select>
             </div>
-            <div className="flex-1 min-w-[150px]">
-              <p className="text-[10px] font-bold uppercase text-gray-400 mb-2">ວັນທີເຂົ້າພັກ</p>
-              <input type="date" className="w-full p-2 border-b-2 border-gray-100 focus:outline-none text-sm" />
+
+            <div className="flex-1 min-w-[100px]">
+              <p className="text-[8px] text-gray-400 mb-0.5">ວັນທີເຂົ້າພັກ</p>
+              <input type="date" className="w-full p-1 border-b text-[11px] outline-none" />
             </div>
-            <div className="flex-1 min-w-[150px]">
-              <p className="text-[10px] font-bold uppercase text-gray-400 mb-2">ວັນທີເຊັກເອົາ</p>
-              <input type="date" className="w-full p-2 border-b-2 border-gray-100 focus:outline-none text-sm" />
+            <div className="flex-1 min-w-[100px]">
+              <p className="text-[8px] text-gray-400 mb-0.5">ວັນທີເຊັກເອົາ</p>
+              <input type="date" className="w-full p-1 border-b text-[11px] outline-none" />
             </div>
-            <button className="bg-blue-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-              ປະຫວັດການຈອງ
+
+            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-md text-[11px] transition-all active:scale-95">
+              ຈອງຫ້ອງ
             </button>
-            <div className="relative flex-1 min-w-[180px]">
-              <Search className="absolute left-3 bottom-3 text-gray-400" size={18} />
-              <input type="text" placeholder="ຄົ້ນຫາ" className="w-full p-2.5 pl-10 border rounded-xl bg-gray-50 focus:outline-none text-sm" />
+
+            <div className="relative flex-1 min-w-[130px]">
+              <Search className="absolute left-2 bottom-2 text-gray-400" size={12} />
+              <input type="text" placeholder="ຄົ້ນຫາ" className="w-full p-1.5 pl-7 border rounded-md bg-gray-50 text-[11px] outline-none" />
             </div>
           </div>
         </div>
       </section>
 
-      {/* --- Room List Section --- */}
-      <section className="container mx-auto px-12 pt-32 pb-20">
-        <div className="flex items-center gap-4 mb-12">
-           <div className="w-1.5 h-10 bg-black"></div>
-           <h2 className="text-5xl font-bold">ຫ້ອງ</h2>
+      {/* Room List */}
+      <section className="container mx-auto px-6 pt-16 pb-12">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="w-1 h-6 bg-black" />
+          <h2 className="text-2xl font-bold">ຫ້ອງ</h2>
         </div>
-        
-        <div className="relative group">
-          {/* Arrow Buttons (Decorations) */}
-          <button className="absolute -left-12 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-black">
-            <ChevronLeft size={40} />
-          </button>
-          <button className="absolute -right-12 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-black">
-            <ChevronRight size={40} />
-          </button>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {rooms.map((room) => (
-              <div key={room.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl transition-all group/card">
-                <div className="relative h-60 w-full overflow-hidden">
-                  <Image 
-                    src={room.img} 
-                    alt={room.name}
-                    fill
-                    className="object-cover group-hover/card:scale-110 transition-transform duration-500"
-                  />
-                  <div className="absolute top-3 right-3 bg-white/90 p-1.5 rounded-lg shadow-sm">
-                    <div className="w-4 h-4 bg-black rounded-sm"></div>
-                  </div>
-                </div>
-                
-                <div className="p-5">
-                  <h3 className="text-xl font-bold text-gray-800">{room.name}</h3>
-                  <div className="flex justify-between items-center mt-5">
-                    <div className="text-lg font-black text-gray-900">
-                      $ {room.price} ກີບ
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-400 font-bold text-sm">
-                      <Bed size={20} className="text-gray-400" />
-                      <span>{room.id}</span>
-                    </div>
-                  </div>
-                  <button className="w-full mt-5 py-2.5 border-2 border-gray-200 rounded-xl text-sm font-bold hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all">
-                    ເບິ່ງຂໍ້ມູນທັງໝົດ
-                  </button>
-                </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {rooms.map((room) => (
+            <div key={room.id} className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all">
+              <div className="relative h-40 w-full overflow-hidden">
+                <Image src={room.img} alt={room.name} fill className="object-cover" />
               </div>
-            ))}
-          </div>
+              <div className="p-3">
+                <h3 className="text-sm font-bold text-gray-800">{room.name}</h3>
+                <div className="flex justify-between items-center mt-2">
+                  <div className="text-[13px] font-bold text-blue-600">{room.price} ກີບ</div>
+                  <div className="flex items-center gap-1 text-gray-400 text-[10px]">
+                    <Bed size={12} /><span>{room.id}</span>
+                  </div>
+                </div>
+                {/* ✅ ກົດ Card ກໍ set ຫ້ອງນັ້ນ */}
+                <button
+                  onClick={() => setSelectedRoom(room.name)}
+                  className="w-full mt-3 py-1 border border-gray-200 rounded-md text-[10px] font-bold hover:bg-gray-900 hover:text-white transition-all"
+                >
+                  ເບິ່ງຂໍ້ມູນ
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
     </main>
