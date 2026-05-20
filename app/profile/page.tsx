@@ -1,15 +1,18 @@
 "use client";
 import React, { useState } from "react";
 import Image from "next/image";
-import { Search, Bed, User, Bookmark } from "lucide-react";
+import { Search, Bed, User, Bookmark, LogOut } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
 import BookingModal from "@/app/payment/page";
 import HistoryModal from "@/app/history/page";
 
 export default function ProfilePage() {
+  const { data: session, status } = useSession();
+
   const [isBookingOpen,    setIsBookingOpen]    = useState(false);
   const [isHistoryOpen,    setIsHistoryOpen]    = useState(false);
   const [selectedRoom,     setSelectedRoom]     = useState("Luxzy Room");
-  const [selectedRoomId,   setSelectedRoomId]   = useState("N01");  // ✅ ເພີ່ມ
+  const [selectedRoomId,   setSelectedRoomId]   = useState("N01");
   const [selectedCheckIn,  setSelectedCheckIn]  = useState("");
   const [selectedCheckOut, setSelectedCheckOut] = useState("");
 
@@ -29,10 +32,19 @@ export default function ProfilePage() {
           <div className="absolute inset-0 bg-black/25" />
         </div>
 
-        <nav className="relative z-20 flex justify-end p-5 container mx-auto">
+        <nav className="relative z-20 flex justify-end p-5 container mx-auto gap-2">
           <button className="bg-slate-900/80 px-4 py-1.5 rounded-lg flex items-center gap-2 text-[12px] border border-white/20">
-            Mexay <User size={14} />
+            {status === "loading" ? "..." : session?.user?.name ?? "Guest"}
+            <User size={14} />
           </button>
+          {session && (
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="bg-red-600/80 px-4 py-1.5 rounded-lg flex items-center gap-2 text-[12px] border border-white/20 hover:bg-red-700/80 transition-all active:scale-95"
+            >
+              ອອກ <LogOut size={14} />
+            </button>
+          )}
         </nav>
 
         <div className="relative z-20 container mx-auto px-6 mt-12">
@@ -50,14 +62,14 @@ export default function ProfilePage() {
                 value={selectedRoom}
                 onChange={(e) => {
                   setSelectedRoom(e.target.value);
-                  // ✅ sync RoomId ຕາມຊື່ຫ້ອງທີ່ເລືອກ
                   const found = rooms.find((r) => r.name === e.target.value);
                   if (found) setSelectedRoomId(found.id);
                 }}
                 className="w-full p-2.5 border rounded-lg text-[13px] bg-gray-50 outline-none"
               >
-                <option value="Luxzy Room">Luxzy Room</option>
-                <option value="Cenima Room">Cenima Room</option>
+                {rooms.map((r) => (
+                  <option key={r.id} value={r.name}>{r.name}</option>
+                ))}
               </select>
             </div>
             <div className="flex-1 min-w-[150px]">
@@ -116,11 +128,10 @@ export default function ProfilePage() {
                     <Bed size={16} /> {room.id}
                   </div>
                 </div>
-                {/* ✅ ສົ່ງທັງ name ແລະ id ຂອງຫ້ອງນັ້ນ */}
                 <button
                   onClick={() => {
                     setSelectedRoom(room.name);
-                    setSelectedRoomId(room.id);   // ✅ ຕັ້ງ id ຫ້ອງ
+                    setSelectedRoomId(room.id);
                     setIsBookingOpen(true);
                   }}
                   className="w-full mt-6 py-2.5 border-2 border-gray-800 rounded-xl text-[12px] font-black uppercase tracking-widest hover:bg-gray-800 hover:text-white transition-all active:scale-95"
@@ -133,7 +144,6 @@ export default function ProfilePage() {
         </div>
       </section>
 
-      {/* ✅ ສົ່ງ roomId ໄປ Modal */}
       <BookingModal
         isOpen={isBookingOpen}
         onClose={() => setIsBookingOpen(false)}
