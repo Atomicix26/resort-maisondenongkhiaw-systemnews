@@ -1,97 +1,72 @@
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
-
 import { prisma } from "@/lib/prisma"
 
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
+  // ── 1. Parse body ──────────────────────────────────────────────────
+  let body: Record<string, string>
   try {
-    const body = await request.json()
+    body = await request.json()
+  } catch {
+    return NextResponse.json(
+      { message: "Invalid request body" },
+      { status: 400 }
+    )
+  }
 
-    const {
-      name,
-      lastName,
-      phone,
-      email,
-      password,
-    } = body
+  const { name, lastName, phone, email, password } = body
 
-    // Validate
-    if (
-      !name ||
-      !lastName ||
-      !phone ||
-      !email ||
-      !password
-    ) {
+  // ── 2. Validate ────────────────────────────────────────────────────
+  if (!name || !lastName || !phone || !email || !password) {
+    return NextResponse.json(
+      { message: "ກະລຸນາກອກຂໍ້ມູນໃຫ້ຄົບທຸກຊ່ອງ" },
+      { status: 400 }
+    )
+  }
+
+  if (password.length < 6) {
+    return NextResponse.json(
+      { message: "Password ຕ້ອງມີຢ່າງໜ້ອຍ 6 ຕົວ" },
+      { status: 400 }
+    )
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email)) {
+    return NextResponse.json(
+      { message: "Email ບໍ່ຖືກຕ້ອງ" },
+      { status: 400 }
+    )
+  }
+
+  // ── 3. DB operations ───────────────────────────────────────────────
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } })
+
+    if (existing) {
       return NextResponse.json(
-        {
-          message:
-            "Missing required fields",
-        },
-        {
-          status: 400,
-        }
+        { message: "Email ນີ້ຖຶກໃຊ້ງານແລ້ວ" },
+        { status: 409 }
       )
     }
 
-    // Check existing user
-    const existingUser =
-      await prisma.user.findUnique({
-        where: {
-          email,
-        },
-      })
+    const hashed = await bcrypt.hash(password, 10)
 
-    if (existingUser) {
-      return NextResponse.json(
-        {
-          message:
-            "Email already exists",
-        },
-        {
-          status: 409,
-        }
-      )
-    }
-
-    // Hash password
-    const hashedPassword =
-      await bcrypt.hash(password, 10)
-
-    // Create user
     await prisma.user.create({
-      data: {
-        name,
-        lastName,
-        phone,
-        email,
-        password: hashedPassword,
-        role: "USER",
-      },
+      data: { name, lastName, phone, email, password: hashed, role: "USER" },
     })
 
     return NextResponse.json(
-      {
-        message:
-          "Register successful",
-      },
-      {
-        status: 201,
-      }
+      { message: "ສະໝັກສຳເລັດ" },
+      { status: 201 }
     )
   } catch (error) {
-    console.error(error)
+    // Log server-side but always return JSON to client
+    console.error("[REGISTER_ERROR]", error)
 
     return NextResponse.json(
-      {
-        message:
-          "Internal server error",
-      },
-      {
-        status: 500,
-      }
+      { message: "ເກີດຂໍ້ຜິດພາດໃນລະບົບ ກະລຸນາລອງໃໝ່" },
+      { status: 500 }
     )
   }
 }

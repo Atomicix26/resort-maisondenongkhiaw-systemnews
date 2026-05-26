@@ -7,86 +7,123 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─────────────────────────────────────────
+//  USER
+// ─────────────────────────────────────────
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  password      String
-  name          String?
-  lastName      String?
-  phone         String?
-  role          Role      @default(USER)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  bookings      Booking[]
-  reviews       Review[]
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  lastName  String?
+  phone     String?
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings Booking[]
+  reviews  Review[]
 
   @@map("users")
 }
 
+// ─────────────────────────────────────────
+//  STAFF
+// ─────────────────────────────────────────
+model Staff {
+  id        String   @id @default(cuid())
+  name      String
+  lastName  String
+  phone     String?
+  position  String?
+  startDate DateTime @default(now())
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("staff")
+}
+
+// ─────────────────────────────────────────
+//  ROOM
+// ─────────────────────────────────────────
 model Room {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   name        String
-  description String    @db.Text
-  price       Decimal   @db.Decimal(10, 2)
+  description String   @db.Text
+  price       Decimal  @db.Decimal(10, 2)
   capacity    Int
   bedType     String
-  size        Int       // in square meters
+  size        Int
   view        String?
   imageUrl    String?
-  images      String?   @db.Text // JSON array of image URLs
-  amenities   String?   @db.Text // JSON array of amenities
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  bookings    Booking[]
-  reviews     Review[]
-  featured  Boolean  @default(false)
+  images      String?  @db.Text  // JSON array
+  amenities   String?  @db.Text  // JSON array
+  isActive    Boolean  @default(true)
+  featured    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bookings Booking[]
+  reviews  Review[]
 
   @@map("rooms")
 }
 
+// ─────────────────────────────────────────
+//  BOOKING
+// ─────────────────────────────────────────
 model Booking {
-  id            String        @id @default(cuid())
-  userId        String
-  roomId        String
-  checkIn       DateTime
-  checkOut      DateTime
-  totalPrice    Decimal       @db.Decimal(10, 2)
-  guests        Int
-  status        BookingStatus @default(PENDING)
-  paymentStatus PaymentStatus @default(PENDING)
-  paymentMethod   String?
-  paymentProof    String?
-  specialRequest String?      @db.Text
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  room          Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  id             String        @id @default(cuid())
+  userId         String
+  roomId         String
+  checkIn        DateTime
+  checkOut       DateTime
+  totalPrice     Decimal       @db.Decimal(10, 2)
+  guests         Int
+  status         BookingStatus @default(PENDING)
+  paymentStatus  PaymentStatus @default(PENDING)
+  paymentMethod  String?
+  paymentProof   String?
+  specialRequest String?       @db.Text
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([roomId])
   @@map("bookings")
 }
 
+// ─────────────────────────────────────────
+//  REVIEW
+// ─────────────────────────────────────────
 model Review {
   id        String   @id @default(cuid())
   userId    String
   roomId    String
-  rating    Int      // 1-5
+  rating    Int
   comment   String?  @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, roomId]) // One review per user per room
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roomId])
   @@index([roomId])
   @@map("reviews")
 }
 
+// ─────────────────────────────────────────
+//  ENUMS
+// ─────────────────────────────────────────
 enum Role {
   USER
   ADMIN
+  SUPERADMIN
 }
 
 enum BookingStatus {
