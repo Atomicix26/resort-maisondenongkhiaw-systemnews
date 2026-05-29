@@ -1,0 +1,28 @@
+import { type NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
+
+// GET /api/admin/reviews — ดึงทุก review พร้อม management status
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (session.user.role === "USER") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+    const reviews = await prisma.review.findMany({
+      where:   { deletedAt: null },
+      include: {
+        user:       { select: { name: true, lastName: true } },
+        room:       { select: { name: true } },
+        management: true,
+      },
+      orderBy: { createdAt: "desc" },
+    })
+
+    return NextResponse.json(reviews)
+  } catch (error) {
+    console.error("Admin reviews error:", error)
+    return NextResponse.json({ error: "Failed to fetch reviews" }, { status: 500 })
+  }
+}

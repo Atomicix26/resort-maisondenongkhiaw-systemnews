@@ -71,13 +71,25 @@ export default function PaymentPage() {
   // fetch room
   useEffect(() => {
     if (!roomId) return
+
     fetch("/api/rooms")
-      .then((r) => r.json())
-      .then((rooms: Room[]) => {
+      .then(async (res) => {
+        const data = await res.json()
+        if (!res.ok || !Array.isArray(data)) {
+          console.error("[PAYMENT_FETCH_ROOM] invalid response", data)
+          return null
+        }
+        return data as Room[]
+      })
+      .then((rooms) => {
+        if (!rooms) return setRoom(null)
         const found = rooms.find((r) => r.id === roomId)
         setRoom(found ?? null)
       })
-      .catch(console.error)
+      .catch((error) => {
+        console.error("[PAYMENT_FETCH_ROOM]", error)
+        setRoom(null)
+      })
       .finally(() => setLoadRoom(false))
   }, [roomId])
 

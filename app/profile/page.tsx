@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import {
   User, LogOut, Bed, Search, Wifi, Wind,
-  Users, Eye, Pencil, X, CheckCircle2, ChevronDown, Star,
+  Users, Eye, Pencil, X, CheckCircle2, Star,
 } from "lucide-react"
 
 // ── Types ────────────────────────────────────────────────────────
@@ -90,28 +90,22 @@ function EditProfileModal({
 
         <form onSubmit={handleSave} className="space-y-4">
           <div>
-            <label className="text-[11px] text-gray-400 uppercase tracking-wide font-medium">ຊື່</label>
-            <input
-              value={name} onChange={(e) => setName(e.target.value)}
-              className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2.5 text-[13px] outline-none focus:border-blue-400"
-              placeholder="ຊື່"
-            />
+            <label className="text-[12px] text-gray-600 font-semibold">ຊື່</label>
+            <input value={name} onChange={(e) => setName(e.target.value)}
+              className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2.5 text-[14px] text-gray-900 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-gray-300"
+              placeholder="ກອກຊື່..." />
           </div>
           <div>
-            <label className="text-[11px] text-gray-400 uppercase tracking-wide font-medium">ນາມສະກຸນ</label>
-            <input
-              value={lastName} onChange={(e) => setLastName(e.target.value)}
-              className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2.5 text-[13px] outline-none focus:border-blue-400"
-              placeholder="ນາມສະກຸນ"
-            />
+            <label className="text-[12px] text-gray-600 font-semibold">ນາມສະກຸນ</label>
+            <input value={lastName} onChange={(e) => setLastName(e.target.value)}
+              className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2.5 text-[14px] text-gray-900 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-gray-300"
+              placeholder="ກອກນາມສະກຸນ..." />
           </div>
           <div>
-            <label className="text-[11px] text-gray-400 uppercase tracking-wide font-medium">ເບີໂທ</label>
-            <input
-              value={phone} onChange={(e) => setPhone(e.target.value)}
-              className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2.5 text-[13px] outline-none focus:border-blue-400"
-              placeholder="020xxxxxxxx"
-            />
+            <label className="text-[12px] text-gray-600 font-semibold">ເບີໂທ</label>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)}
+              className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-2.5 text-[14px] text-gray-900 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-gray-300"
+              placeholder="020xxxxxxxx" />
           </div>
 
           {error   && <p className="text-red-500 text-[12px]">{error}</p>}
@@ -139,27 +133,24 @@ function EditProfileModal({
 
 // ── Main Page ────────────────────────────────────────────────────
 export default function ProfilePage() {
-  const router            = useRouter()
+  const router                    = useRouter()
   const { data: session, status } = useSession()
 
-  const [profile,     setProfile]     = useState<UserProfile | null>(null)
-  const [rooms,       setRooms]       = useState<Room[]>([])
-  const [loadProfile, setLoadProfile] = useState(true)
-  const [loadRooms,   setLoadRooms]   = useState(true)
-  const [search,      setSearch]      = useState("")
-  const [editOpen,    setEditOpen]    = useState(false)
-
-  const [checkIn,     setCheckIn]     = useState("")
-  const [checkOut,    setCheckOut]    = useState("")
+  const [profile,      setProfile]      = useState<UserProfile | null>(null)
+  const [rooms,        setRooms]        = useState<Room[]>([])
+  const [loadProfile,  setLoadProfile]  = useState(true)
+  const [loadRooms,    setLoadRooms]    = useState(true)
+  const [search,       setSearch]       = useState("")
+  const [editOpen,     setEditOpen]     = useState(false)
+  const [checkIn,      setCheckIn]      = useState("")
+  const [checkOut,     setCheckOut]     = useState("")
   const [selectedRoom, setSelectedRoom] = useState("")
 
   const today = new Date().toISOString().split("T")[0]
 
-  // ── Fetch profile ────────────────────────────────────────────
   useEffect(() => {
     if (status === "unauthenticated") { router.push("/login"); return }
     if (status !== "authenticated")  return
-
     fetch("/api/profile")
       .then((r) => r.json())
       .then((data) => setProfile(data))
@@ -167,29 +158,27 @@ export default function ProfilePage() {
       .finally(() => setLoadProfile(false))
   }, [status, router])
 
-  // ── Fetch rooms ──────────────────────────────────────────────
   const fetchRooms = useCallback(async (q = "") => {
     setLoadRooms(true)
     try {
       const url = q ? `/api/rooms?search=${encodeURIComponent(q)}` : "/api/rooms"
       const res = await fetch(url)
-      const data: Room[] = await res.json()
+      const data = await res.json()
+      if (!res.ok || !Array.isArray(data)) { setRooms([]); return }
       setRooms(data)
-    } catch (err) {
-      console.error(err)
+    } catch {
+      setRooms([])
     } finally {
       setLoadRooms(false)
     }
   }, [])
 
   useEffect(() => { fetchRooms() }, [fetchRooms])
-
   useEffect(() => {
     const t = setTimeout(() => fetchRooms(search), 400)
     return () => clearTimeout(t)
   }, [search, fetchRooms])
 
-  // ── Book handler ─────────────────────────────────────────────
   function handleBook() {
     if (!selectedRoom || !checkIn || !checkOut) {
       alert("ກະລຸນາເລືອກຫ້ອງ ແລະ ວັນທີໃຫ້ຄົບ"); return
@@ -209,99 +198,97 @@ export default function ProfilePage() {
     ? `${profile.name} ${profile.lastName ?? ""}`.trim()
     : session?.user?.email ?? "User"
 
+  const roleColor =
+    profile?.role === "SUPERADMIN" ? "bg-purple-500/80" :
+    profile?.role === "ADMIN"      ? "bg-emerald-500/80" :
+                                     "bg-blue-500/80"
+
   return (
     <main className="min-h-screen bg-gray-50 font-lao overflow-x-hidden">
 
-      {/* ── Hero ──────────────────────────────────────────────── */}
-      <section className="relative h-[440px] w-full text-white">
+      {/* ── Hero ───────────────────────────────────────────────── */}
+      <section className="relative h-[420px] w-full text-white">
         <div className="absolute inset-0 z-0">
           <Image src="/pic.png" alt="Resort" fill className="object-cover" priority sizes="100vw" />
-          <div className="absolute inset-0 bg-black/30" />
+          {/* gradient: dark top + dark bottom, clear middle */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-black/55" />
         </div>
 
-        {/* Navbar */}
-        <nav className="relative z-20 flex justify-between items-center px-8 py-4 container mx-auto">
-          <Link href="/" className="font-bold text-base tracking-wide drop-shadow">Resort MDNK1</Link>
+        {/* ── Navbar: Resort name (prominent) + logout only ── */}
+        <nav className="relative z-20 flex justify-between items-center px-8 py-5 container mx-auto">
+          {/* Resort branding */}
+          <Link href="/" className="flex flex-col leading-none group">
+            <span className="text-[11px] font-semibold text-white/80 uppercase tracking-[0.2em] mb-0.5 drop-shadow">
+              ຍິນດີຕ້ອນຮັບສູ່
+            </span>
+            <span className="text-[24px] font-extrabold tracking-wide drop-shadow-lg group-hover:text-white/90 transition-colors">
+              Resort MDNK1
+            </span>
+          </Link>
 
           <div className="flex items-center gap-2">
-            {/* User dropdown */}
-            <div className="relative group">
-              <button className="bg-white/10 hover:bg-white/20 backdrop-blur px-4 py-1.5 rounded-lg flex items-center gap-2 text-[12px] border border-white/20 transition-all">
-                <User size={13} />
-                {displayName}
-                <ChevronDown size={11} />
-              </button>
-              <div className="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                <button
-                  onClick={() => setEditOpen(true)}
-                  className="flex items-center gap-2 w-full px-4 py-2 text-[12px] text-gray-700 hover:bg-blue-50 hover:text-blue-600"
-                >
-                  <Pencil size={12} /> ແກ້ໄຂຂໍ້ມູນ
-                </button>
-                <Link href="/history" className="flex items-center gap-2 px-4 py-2 text-[12px] text-gray-700 hover:bg-blue-50 hover:text-blue-600">
-                  <Bed size={12} /> ປະຫວັດການຈອງ
-                </Link>
-                {(session?.user?.role === "ADMIN" || session?.user?.role === "SUPERADMIN") && (
-                  <>
-                    <div className="h-px bg-gray-100 mx-3 my-1" />
-                    <Link href="/admin/dashboard" className="flex items-center gap-2 px-4 py-2 text-[12px] text-purple-600 hover:bg-purple-50">
-                      <Star size={12} /> Admin Panel
-                    </Link>
-                  </>
-                )}
-              </div>
-            </div>
-
+            {(session?.user?.role === "ADMIN" || session?.user?.role === "SUPERADMIN") && (
+              <Link href="/admin/dashboard"
+                className="bg-purple-500/70 hover:bg-purple-600/80 backdrop-blur-sm px-4 py-1.5 rounded-lg flex items-center gap-1.5 text-[12px] border border-white/20 transition-all">
+                <Star size={12} /> Admin Panel
+              </Link>
+            )}
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="bg-red-500/80 hover:bg-red-600/90 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-[12px] border border-white/20 transition-all"
-            >
-              <LogOut size={12} /> ອອກ
+              className="bg-red-500/80 hover:bg-red-600 px-4 py-1.5 rounded-lg flex items-center gap-2 text-[12px] border border-white/20 transition-all active:scale-95">
+              <LogOut size={13} /> ອອກ
             </button>
           </div>
         </nav>
 
-        {/* Profile Card */}
-        <div className="relative z-20 container mx-auto px-8 mt-4 flex items-center gap-5">
-          <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur border-2 border-white/40 flex items-center justify-center shadow-lg">
-            <User size={28} className="text-white" />
-          </div>
-          <div>
-            <p className="text-white/70 text-[11px] uppercase tracking-wider">ໂປຣໄຟລ໌</p>
-            <h1 className="text-3xl font-bold drop-shadow">{displayName}</h1>
-            <div className="flex items-center gap-3 mt-1">
-              <p className="text-white/80 text-[12px]">{profile?.email}</p>
-              {profile?.phone && (
-                <p className="text-white/60 text-[12px]">· {profile.phone}</p>
-              )}
-              <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">
-                {profile?.role}
-              </span>
+        {/* ── Profile — single display ── */}
+        <div className="relative z-20 container mx-auto px-8 mt-5">
+          <div className="flex items-center gap-5">
+            {/* Avatar */}
+            <div className="w-[72px] h-[72px] rounded-2xl bg-white/15 backdrop-blur-md border-2 border-white/30 flex items-center justify-center shadow-xl flex-shrink-0">
+              <User size={34} className="text-white/90" />
             </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <p className="text-white/55 text-[9.5px] uppercase tracking-[0.18em] mb-1">ໂປຣໄຟລ໌ສ່ວນຕົວ</p>
+              <h1 className="text-[26px] font-extrabold drop-shadow-lg leading-none truncate">
+                {displayName}
+              </h1>
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-2">
+                <span className="text-white text-[13px] font-medium drop-shadow">{profile?.email}</span>
+                {profile?.phone && (
+                  <>
+                    <span className="text-white/50">·</span>
+                    <span className="text-white/90 text-[13px] font-medium drop-shadow">{profile.phone}</span>
+                  </>
+                )}
+                <span className={`${roleColor} backdrop-blur text-white text-[10px] font-bold px-3 py-0.5 rounded-full tracking-widest uppercase shadow`}>
+                  {profile?.role}
+                </span>
+              </div>
+            </div>
+
+            {/* Edit */}
+            <button
+              onClick={() => setEditOpen(true)}
+              className="flex-shrink-0 bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/25 text-white text-[12px] px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all active:scale-95 shadow-lg">
+              <Pencil size={13} /> ແກ້ໄຂຂໍ້ມູນ
+            </button>
           </div>
-          <button
-            onClick={() => setEditOpen(true)}
-            className="ml-auto bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[12px] px-4 py-2 rounded-lg flex items-center gap-1.5 transition-all"
-          >
-            <Pencil size={12} /> ແກ້ໄຂ
-          </button>
         </div>
 
-        {/* Search Bar */}
+        {/* ── Search / Booking Bar ── */}
         <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 z-30 w-full max-w-5xl px-4">
           <div className="bg-white rounded-xl shadow-lg p-3 flex flex-wrap items-end gap-3 text-gray-700 border border-gray-100">
 
             <div className="flex-1 min-w-[140px]">
               <p className="text-[9px] font-semibold text-gray-400 mb-1 uppercase tracking-wider">ຈອງຫ້ອງ</p>
-              <select
-                value={selectedRoom} onChange={(e) => setSelectedRoom(e.target.value)}
-                className="w-full border-b border-gray-200 py-1 text-[12px] bg-transparent outline-none text-gray-700"
-              >
+              <select value={selectedRoom} onChange={(e) => setSelectedRoom(e.target.value)}
+                className="w-full border-b border-gray-200 py-1 text-[12px] bg-transparent outline-none text-gray-700">
                 <option value="">ເລືອກຫ້ອງ</option>
                 {rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name} — {r.price.toLocaleString()} ₭
-                  </option>
+                  <option key={r.id} value={r.id}>{r.name} — {r.price.toLocaleString()} ₭</option>
                 ))}
               </select>
             </div>
@@ -338,7 +325,7 @@ export default function ProfilePage() {
         </div>
       </section>
 
-      {/* ── Room List ───────────────────────────────────────────── */}
+      {/* ── Room List ─────────────────────────────────────────── */}
       <section className="container mx-auto px-6 pt-20 pb-16">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-1 h-6 bg-blue-600 rounded-full" />
@@ -420,8 +407,7 @@ export default function ProfilePage() {
                       setSelectedRoom(room.id)
                       window.scrollTo({ top: 0, behavior: "smooth" })
                     }}
-                    className="w-full mt-4 py-2 border-2 border-gray-800 rounded-xl text-[11px] font-bold uppercase tracking-wider hover:bg-gray-800 hover:text-white transition-all active:scale-95"
-                  >
+                    className="w-full mt-4 py-2 border-2 border-gray-800 rounded-xl text-[11px] font-bold uppercase tracking-wider hover:bg-gray-800 hover:text-white transition-all active:scale-95">
                     ເລືອກຫ້ອງນີ້
                   </button>
                 </div>
@@ -431,7 +417,7 @@ export default function ProfilePage() {
         )}
       </section>
 
-      {/* ── Edit Modal ───────────────────────────────────────────── */}
+      {/* ── Edit Modal ───────────────────────────────────────── */}
       {editOpen && profile && (
         <EditProfileModal
           profile={profile}

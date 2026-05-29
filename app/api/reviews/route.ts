@@ -1,14 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { PrismaClient } from "@prisma/client"
-
-const prisma = new PrismaClient()
+import { prisma } from "@/lib/prisma"
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -16,55 +13,51 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { roomId, rating, comment } = body
 
-    // Validate required fields
     if (!roomId || !rating) {
       return NextResponse.json({ error: "Room ID and rating are required" }, { status: 400 })
     }
-
-    // Check if rating is valid
     if (rating < 1 || rating > 5) {
       return NextResponse.json({ error: "Rating must be between 1 and 5" }, { status: 400 })
     }
 
-    // Check if user has stayed at this room (completed booking)
+    // ✅ เช็คเฉพาะ COMPLETED เท่านั้น (checkout จริงแล้ว)
     const completedBooking = await prisma.booking.findFirst({
       where: {
-        userId: session.user.id,
+        userId:   session.user.id,
         roomId,
-        status: { in: ["COMPLETED", "CONFIRMED"] },
-        checkOut: { lt: new Date() },
+        status:   "COMPLETED",
+        deletedAt: null,
       },
     })
-
     if (!completedBooking) {
-      return NextResponse.json({ error: "You can only review rooms you have stayed at" }, { status: 400 })
+      return NextResponse.json(
+        { error: "You can only review rooms you have stayed at" },
+        { status: 400 }
+      )
     }
 
-    // Check if user already reviewed this room
+    // ✅ เช็ค soft delete ด้วย
     const existingReview = await prisma.review.findFirst({
-      where: {
-        userId: session.user.id,
-        roomId,
-      },
+      where: { userId: session.user.id, roomId, deletedAt: null },
     })
 
     if (existingReview) {
-      // Update existing review
       const review = await prisma.review.update({
         where: { id: existingReview.id },
-        data: { rating, comment },
+        data:  { rating, comment, updatedAt: new Date() },
       })
       return NextResponse.json({ review })
     }
 
-    // Create new review
-    const review = await prisma.review.create({
-      data: {
-        userId: session.user.id,
-        roomId,
-        rating,
-        comment,
-      },
+    // ✅ สร้าง Review + ReviewManage พร้อมกัน (transaction)
+    const review = await prisma.$transaction(async (tx) => {
+      const newReview = await tx.review.create({
+        data: { userId: session.user.id, roomId, rating, comment },
+      })
+      await tx.reviewManage.create({
+        data: { reviewId: newReview.id, status: "PENDING" },
+      })
+      return newReview
     })
 
     return NextResponse.json({ review }, { status: 201 })
@@ -83,9 +76,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Room ID is required" }, { status: 400 })
     }
 
+    // ✅ filter soft delete
     const reviews = await prisma.review.findMany({
-      where: { roomId },
-      include: { user: { select: { name: true } } },
+      where: { roomId, deletedAt: null },
+      include: {
+        user: { select: { name: true, lastName: true } },
+        management: { select: { status: true, reply: true } },
+      },
       orderBy: { createdAt: "desc" },
     })
 

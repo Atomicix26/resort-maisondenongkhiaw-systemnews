@@ -7,136 +7,441 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─────────────────────────────────────────
-//  USER
-// ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════
+//  USER  (Customer + Admin + SuperAdmin — ONE table)
+//  แก้: ไม่แยก Employee ออกมา ใช้ role แทน
+// ════════════════════════════════════════════════════════════════
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
+  id        String    @id @default(cuid())
+  email     String    @unique
   password  String
   name      String?
   lastName  String?
   phone     String?
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  address   String?
+  role      Role      @default(USER)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?                    // soft delete
 
-  bookings Booking[]
-  reviews  Review[]
+  // relations
+  staff          Staff?                  // ถ้า role=ADMIN → มี Staff profile
+  bookings       Booking[]
+  reviews        Review[]
+  cancelRequests CancelRequest[]
+  accessLogs     AccessLog[]
 
+  @@index([email])
+  @@index([role])
   @@map("users")
 }
 
-// ─────────────────────────────────────────
-//  STAFF
-// ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════
+//  STAFF  (Employee Profile — FK → User แทนการมี password ซ้ำ)
+//  แก้: ไม่มี email/password ซ้ำ — ใช้ User.email / User.password
+// ════════════════════════════════════════════════════════════════
 model Staff {
-  id        String   @id @default(cuid())
-  name      String
-  lastName  String
-  phone     String?
-  position  String?
-  startDate DateTime @default(now())
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String    @id @default(cuid())
+  userId    String    @unique              // ← FK → User (1:1)
+  position  String?                        // ตำแหน่งงาน
+  role      StaffRole @default(STAFF)      // STAFF | MANAGER | ADMIN
+  salary    Decimal?  @db.Decimal(10, 2)
+  startDate DateTime  @default(now())
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkIns      CheckInLog[]
+  checkOuts     CheckOutLog[]
+  reviewActions ReviewManage[]
+  cancelActions CancelRequest[]
+  statusChanges StatusRoom[]
+  approvals     BookAppr[]
 
   @@map("staff")
 }
 
-// ─────────────────────────────────────────
-//  ROOM
-// ─────────────────────────────────────────
-model Room {
+// ════════════════════════════════════════════════════════════════
+//  ROOM TYPE
+// ════════════════════════════════════════════════════════════════
+model RoomType {
   id          String   @id @default(cuid())
-  name        String
-  description String   @db.Text
-  price       Decimal  @db.Decimal(10, 2)
-  capacity    Int
-  bedType     String
-  size        Int
-  view        String?
-  imageUrl    String?
-  images      String?  @db.Text  // JSON array
-  amenities   String?  @db.Text  // JSON array
+  typeName    String
+  description String?  @db.Text
+  basePrice   Decimal  @db.Decimal(10, 2)  // ราคาเริ่มต้น
+  maxGuests   Int
+  images      String?  @db.Text             // JSON array
+  amenities   String?  @db.Text             // JSON array
   isActive    Boolean  @default(true)
-  featured    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  bookings Booking[]
-  reviews  Review[]
+  rooms        Room[]
+  priceConfigs PriceConfig[]
 
+  @@map("room_types")
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ROOM
+// ════════════════════════════════════════════════════════════════
+model Room {
+  id          String     @id @default(cuid())
+  roomNumber  String?    @unique             // เลขห้อง เช่น "101"
+  name        String
+  description String?    @db.Text
+  roomTypeId  String?
+  price       Decimal    @db.Decimal(10, 2)  // override base_price
+  capacity    Int
+  bedType     String?
+  size        Int?                            // ตร.ม.
+  view        String?
+  images      String?    @db.Text            // JSON array
+  amenities   String?    @db.Text            // JSON array
+  status      RoomStatus @default(AVAILABLE)
+  featured    Boolean    @default(false)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?                      // soft delete
+
+  roomType   RoomType?    @relation(fields: [roomTypeId], references: [id])
+  bookings   Booking[]
+  reviews    Review[]
+  statusLogs StatusRoom[]
+
+  @@index([roomTypeId])
+  @@index([status])
   @@map("rooms")
 }
 
-// ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════
+//  PRICE CONFIG  (Seasonal Pricing)
+//  แก้: เพิ่ม priority — ถ้า season ทับกัน priority สูงชนะ
+// ════════════════════════════════════════════════════════════════
+model PriceConfig {
+  id          String   @id @default(cuid())
+  roomTypeId  String
+  seasonName  String
+  priceAmount Decimal  @db.Decimal(10, 2)
+  startDate   DateTime
+  endDate     DateTime
+  priority    Int      @default(1)          // สูงกว่า = ชนะ
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // กฎ: PriceConfig(priority) > Room.price > RoomType.basePrice
+  roomType    RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@index([roomTypeId])
+  @@index([startDate, endDate])
+  @@map("price_configs")
+}
+
+// ════════════════════════════════════════════════════════════════
 //  BOOKING
-// ─────────────────────────────────────────
+//  แก้: ย้าย actualCheckIn/Out เข้ามาใน Booking (ลด complexity)
+//  State Machine: PENDING→CONFIRMED→CHECKED_IN→CHECKED_OUT→COMPLETED
+//                             ↓
+//                         CANCELLED
+// ════════════════════════════════════════════════════════════════
 model Booking {
   id             String        @id @default(cuid())
   userId         String
   roomId         String
-  checkIn        DateTime
+  checkIn        DateTime                    // วันที่จอง
   checkOut       DateTime
+  guests         Int           @default(1)
   totalPrice     Decimal       @db.Decimal(10, 2)
-  guests         Int
   status         BookingStatus @default(PENDING)
-  paymentStatus  PaymentStatus @default(PENDING)
-  paymentMethod  String?
-  paymentProof   String?
   specialRequest String?       @db.Text
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  // ✅ Check-in/out จริง (ย้ายเข้ามาจาก separate table)
+  actualCheckIn    DateTime?               // เวลา check-in จริง
+  actualCheckOut   DateTime?               // เวลา check-out จริง
+  checkInVerifyDoc String?                 // path สำเนา ID
+  checkInRemarks   String?    @db.Text
+  checkOutRemarks  String?    @db.Text
+  checkInStaffId   String?                 // Staff ที่ทำ check-in
+  checkOutStaffId  String?                 // Staff ที่ทำ check-out
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?                      // soft delete
+
+  user         User           @relation(fields: [userId], references: [id])
+  room         Room           @relation(fields: [roomId], references: [id])
+  transactions PaymentTransaction[]        // 1 Booking → N transactions
+  approval     BookAppr?
+  cancelRequest CancelRequest?
+  checkInLogs  CheckInLog[]
+  checkOutLogs CheckOutLog[]
 
   @@index([userId])
   @@index([roomId])
+  @@index([status])
+  @@index([checkIn, checkOut])
   @@map("bookings")
 }
 
-// ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════
+//  PAYMENT TRANSACTION
+//  แก้: แยกจาก Booking เป็น N transactions — รองรับ refund
+//  Type: CHARGE | REFUND | ADJUSTMENT
+// ════════════════════════════════════════════════════════════════
+model PaymentTransaction {
+  id           String            @id @default(cuid())
+  bookingId    String
+  type         TransactionType   @default(CHARGE)
+  amount       Decimal           @db.Decimal(10, 2)
+  method       PaymentMethod     @default(TRANSFER)
+  status       PaymentStatus     @default(PENDING)
+  slipImage    String?
+  paymentDate  DateTime?
+  verifiedAt   DateTime?
+  verifiedById String?           // Staff.id ที่ verify
+  note         String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  booking      Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([status])
+  @@map("payment_transactions")
+}
+
+// ════════════════════════════════════════════════════════════════
+//  BOOK APPROVAL  (Admin อนุมัติ/ปฏิเสธการจอง)
+//  ใช้กับ: Booking พิเศษ หรือ ออฟไลน์เท่านั้น
+//  Booking ปกติ → auto CONFIRMED ทันที
+// ════════════════════════════════════════════════════════════════
+model BookAppr {
+  id        String     @id @default(cuid())
+  bookingId String     @unique
+  staffId   String?
+  status    ApprStatus @default(PENDING)
+  reason    String?    @db.Text
+  refund    Boolean    @default(false)
+  apprDate  DateTime?
+  createdAt DateTime   @default(now())
+
+  booking   Booking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  staff     Staff?     @relation(fields: [staffId], references: [id])
+
+  @@map("book_approvals")
+}
+
+// ════════════════════════════════════════════════════════════════
+//  CHECK-IN LOG  (Audit trail เมื่อ Staff ทำ check-in)
+// ════════════════════════════════════════════════════════════════
+model CheckInLog {
+  id          String   @id @default(cuid())
+  bookingId   String
+  staffId     String?
+  actualTime  DateTime
+  verifyDoc   String?
+  remarks     String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  staff       Staff?   @relation(fields: [staffId], references: [id])
+
+  @@index([bookingId])
+  @@map("check_in_logs")
+}
+
+// ════════════════════════════════════════════════════════════════
+//  CHECK-OUT LOG
+// ════════════════════════════════════════════════════════════════
+model CheckOutLog {
+  id          String   @id @default(cuid())
+  bookingId   String
+  staffId     String?
+  actualTime  DateTime
+  remarks     String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  staff       Staff?   @relation(fields: [staffId], references: [id])
+
+  @@index([bookingId])
+  @@map("check_out_logs")
+}
+
+// ════════════════════════════════════════════════════════════════
+//  CANCEL REQUEST
+// ════════════════════════════════════════════════════════════════
+model CancelRequest {
+  id          String       @id @default(cuid())
+  bookingId   String       @unique
+  userId      String
+  reason      String       @db.Text
+  status      CancelStatus @default(PENDING)
+  refundable  Boolean      @default(false)  // Admin ระบุว่าคืนเงินไหม
+  requestDate DateTime     @default(now())
+  actionDate  DateTime?
+  staffId     String?
+
+  booking     Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id])
+  staff       Staff?       @relation(fields: [staffId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("cancel_requests")
+}
+
+// ════════════════════════════════════════════════════════════════
 //  REVIEW
-// ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════
 model Review {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   roomId    String
-  rating    Int
-  comment   String?  @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  rating    Int                            // 1–5
+  comment   String?   @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?                     // soft delete
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room       Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  management ReviewManage?
 
   @@unique([userId, roomId])
   @@index([roomId])
   @@map("reviews")
 }
 
-// ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════
+//  REVIEW MANAGE  (Admin Reply / Moderate)
+// ════════════════════════════════════════════════════════════════
+model ReviewManage {
+  id         String       @id @default(cuid())
+  reviewId   String       @unique
+  staffId    String?
+  status     ReviewStatus @default(PENDING)
+  reply      String?      @db.Text
+  actionDate DateTime?
+  createdAt  DateTime     @default(now())
+
+  review     Review       @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  staff      Staff?       @relation(fields: [staffId], references: [id])
+
+  @@map("review_manage")
+}
+
+// ════════════════════════════════════════════════════════════════
+//  STATUS ROOM  (Audit trail การเปลี่ยนสถานะห้อง)
+// ════════════════════════════════════════════════════════════════
+model StatusRoom {
+  id         String     @id @default(cuid())
+  roomId     String
+  staffId    String?
+  oldStatus  RoomStatus
+  newStatus  RoomStatus
+  reason     String?
+  changedAt  DateTime   @default(now())
+
+  room       Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  staff      Staff?     @relation(fields: [staffId], references: [id])
+
+  @@index([roomId])
+  @@map("status_room")
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ACCESS LOG  (SuperAdmin audit)
+// ════════════════════════════════════════════════════════════════
+model AccessLog {
+  id         String   @id @default(cuid())
+  userId     String
+  userType   Role
+  ipAddress  String?
+  loginTime  DateTime @default(now())
+  logoutTime DateTime?
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([loginTime])
+  @@map("access_logs")
+}
+
+// ════════════════════════════════════════════════════════════════
 //  ENUMS
-// ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════
+
 enum Role {
   USER
   ADMIN
   SUPERADMIN
 }
 
+enum StaffRole {
+  STAFF
+  MANAGER
+  ADMIN
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  RESERVED
+}
+
+// Booking State Machine
+// PENDING → CONFIRMED → CHECKED_IN → CHECKED_OUT → COMPLETED
+//       ↘                                        ↗
+//        CANCELLED ←─────────────────────────────
 enum BookingStatus {
   PENDING
   CONFIRMED
-  CANCELLED
+  CHECKED_IN
+  CHECKED_OUT
   COMPLETED
+  CANCELLED
+}
+
+enum TransactionType {
+  CHARGE
+  REFUND
+  ADJUSTMENT
+}
+
+enum PaymentMethod {
+  TRANSFER
+  CREDIT_CARD
+  CASH
 }
 
 enum PaymentStatus {
   PENDING
   PENDING_VERIFY
-  UNPAID
   PAID
+  FAILED
   REFUNDED
+}
+
+enum ApprStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  HIDDEN
+  FLAGGED
+}
+
+enum CancelStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

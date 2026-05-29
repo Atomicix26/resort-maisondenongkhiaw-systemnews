@@ -1,14 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"   
-import { BookingStatus, PaymentStatus } from "@prisma/client"
+import { prisma } from "@/lib/prisma"
+import { BookingStatus } from "@prisma/client"
 
-// GET — ดึง booking เดี่ยวตาม id
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+type Params = { params: Promise<{ id: string }> }
+
+// ─────────────────────────────────────────────────────────────
+// GET — ดึง booking เดียว + transactions
+// ─────────────────────────────────────────────────────────────
+export async function GET(_request: NextRequest, { params }: Params) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
@@ -18,12 +19,16 @@ export async function GET(
 
   try {
     const booking = await prisma.booking.findUnique({
-      where:   { id },
-      include: { room: true, user: { select: { id: true, name: true, email: true } } },
+      where: { id, deletedAt: null },
+      include: {
+        room:         { select: { id: true, name: true, images: true, view: true, bedType: true } },
+        transactions: { orderBy: { createdAt: "desc" } },
+        cancelRequest: true,
+      },
     })
 
     if (!booking) {
-      return NextResponse.json({ message: "ບໍ່ພົບລາຍການຈອງ" }, { status: 404 })
+      return NextResponse.json({ message: "ບໍ່ພົບການຈອງ" }, { status: 404 })
     }
 
     const isAdmin = session.user.role === "ADMIN" || session.user.role === "SUPERADMIN"
@@ -31,7 +36,20 @@ export async function GET(
       return NextResponse.json({ message: "Forbidden" }, { status: 403 })
     }
 
-    return NextResponse.json({ booking })
+    return NextResponse.json({
+      booking: {
+        ...booking,
+        totalPrice: Number(booking.totalPrice),
+        room: {
+          ...booking.room,
+          images: safeJson(booking.room.images, []),
+        },
+        transactions: booking.transactions.map((t) => ({
+          ...t,
+          amount: Number(t.amount),
+        })),
+      },
+    })
 
   } catch (error) {
     console.error("[BOOKING_GET_ID]", error)
@@ -39,11 +57,13 @@ export async function GET(
   }
 }
 
-// PATCH — อัปเดต status / paymentStatus (user ยกเลิก, admin อนุมัติ)
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// ─────────────────────────────────────────────────────────────
+// PATCH — เปลี่ยน status
+// User: ยกเลิกได้อย่างเดียว (ต้องผ่าน CancelRequest)
+// Admin: เปลี่ยนได้ทุก status ตาม State Machine
+// Body: { status: BookingStatus }
+// ─────────────────────────────────────────────────────────────
+export async function PATCH(request: NextRequest, { params }: Params) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
@@ -51,7 +71,7 @@ export async function PATCH(
 
   const { id } = await params
 
-  let body: Record<string, string>
+  let body: { status?: string }
   try {
     body = await request.json()
   } catch {
@@ -59,9 +79,12 @@ export async function PATCH(
   }
 
   try {
-    const booking = await prisma.booking.findUnique({ where: { id } })
+    const booking = await prisma.booking.findUnique({
+      where: { id, deletedAt: null },
+    })
+
     if (!booking) {
-      return NextResponse.json({ message: "ບໍ່ພົບລາຍການຈອງ" }, { status: 404 })
+      return NextResponse.json({ message: "ບໍ່ພົບການຈອງ" }, { status: 404 })
     }
 
     const isAdmin = session.user.role === "ADMIN" || session.user.role === "SUPERADMIN"
@@ -69,31 +92,87 @@ export async function PATCH(
       return NextResponse.json({ message: "Forbidden" }, { status: 403 })
     }
 
-    // User ทั่วไป → ยกเลิกได้อย่างเดียว
-    // Admin → เปลี่ยนได้ทุก status
-    const { status, paymentStatus } = body
+    // ── Validate status enum ──────────────────────────────────
+    const validStatuses = Object.values(BookingStatus)
+    if (body.status && !validStatuses.includes(body.status as BookingStatus)) {
+      return NextResponse.json(
+        { message: `status ຕ້ອງເປັນ: ${validStatuses.join(" | ")}` },
+        { status: 400 }
+      )
+    }
 
-    if (!isAdmin && status && status !== "CANCELLED") {
+    // ── User ทั่วไป: ยกเลิกได้ผ่าน CancelRequest เท่านั้น ────
+    if (!isAdmin && body.status && body.status !== "CANCELLED") {
       return NextResponse.json({ message: "ບໍ່ມີສິດປ່ຽນ status ນີ້" }, { status: 403 })
     }
 
-    const updatedBooking = await prisma.booking.update({
-      where: { id },
-      data: {
-        ...(status        && { status: status as BookingStatus }),
-        ...(paymentStatus && { paymentStatus: paymentStatus as PaymentStatus }),
-      },
-      include: { room: { select: { name: true } } },
-    })
-
-    if (status === "CANCELLED") {
-      console.log(`[EMAIL] Cancellation notice → ${session.user.email} | Booking: ${id}`)
+    // ── State Machine validation (Admin) ────────────────────
+    if (isAdmin && body.status) {
+      const allowedTransitions: Record<string, string[]> = {
+        PENDING:      ["CONFIRMED", "CANCELLED"],
+        CONFIRMED:    ["CHECKED_IN", "CANCELLED"],
+        CHECKED_IN:   ["CHECKED_OUT"],
+        CHECKED_OUT:  ["COMPLETED"],
+        COMPLETED:    [],
+        CANCELLED:    [],
+      }
+      const allowed = allowedTransitions[booking.status] ?? []
+      if (!allowed.includes(body.status)) {
+        return NextResponse.json(
+          { message: `ບໍ່ສາມາດປ່ຽນຈາກ ${booking.status} → ${body.status}` },
+          { status: 422 }
+        )
+      }
     }
 
-    return NextResponse.json({ booking: updatedBooking })
+    const updated = await prisma.booking.update({
+      where: { id },
+      data: {
+        ...(body.status && { status: body.status as BookingStatus }),
+      },
+      include: {
+        room: { select: { name: true } },
+      },
+    })
+
+    return NextResponse.json({ booking: updated })
 
   } catch (error) {
     console.error("[BOOKING_PATCH_ID]", error)
     return NextResponse.json({ message: "Server error" }, { status: 500 })
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// DELETE — Soft delete (Admin only)
+// ─────────────────────────────────────────────────────────────
+export async function DELETE(_request: NextRequest, { params }: Params) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+  }
+
+  const isAdmin = session.user.role === "ADMIN" || session.user.role === "SUPERADMIN"
+  if (!isAdmin) {
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 })
+  }
+
+  const { id } = await params
+
+  try {
+    await prisma.booking.update({
+      where: { id },
+      data:  { deletedAt: new Date() },
+    })
+    return NextResponse.json({ success: true })
+
+  } catch (error) {
+    console.error("[BOOKING_DELETE_ID]", error)
+    return NextResponse.json({ message: "Server error" }, { status: 500 })
+  }
+}
+
+function safeJson<T>(value: string | null, fallback: T): T {
+  if (!value) return fallback
+  try { return JSON.parse(value) } catch { return fallback }
 }
