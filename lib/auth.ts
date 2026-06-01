@@ -18,10 +18,19 @@ export const authOptions: NextAuthOptions = {
 
           const user = await prisma.user.findUnique({
             where:  { email: credentials.email },
-            select: { id: true, email: true, name: true, password: true, role: true },
+            select: {
+              id:        true,
+              email:     true,
+              name:      true,
+              password:  true,
+              role:      true,
+              deletedAt: true,   
+            },
           })
 
           if (!user) return null
+
+          if (user.deletedAt) return null
 
           const isValid = await bcrypt.compare(credentials.password, user.password)
           if (!isValid) return null
@@ -67,11 +76,10 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
 }
 
-/** Helper: URL ที่ redirect หลัง login ตาม role */
 export function getRedirectByRole(role: string): string {
   switch (role) {
     case "SUPERADMIN": return "/superadmin/dashboard"
-    case "ADMIN":      return "/admin/dashboard"
+    case "ADMIN":      return "/admin/dashboard"   
     default:           return "/profile"
   }
 }

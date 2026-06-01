@@ -6,24 +6,28 @@ export default withAuth(
     const { pathname } = req.nextUrl
     const role = req.nextauth.token?.role as string | undefined
 
-    // ─── SUPERADMIN only ──────────────────────────
+    // ── SUPERADMIN only ────────────────────────────────────────
     if (pathname.startsWith("/superadmin")) {
       if (role !== "SUPERADMIN") {
-        // มี token แต่ role ไม่พอ → unauthorized
-        // ไม่มี token → authorized:false จัดการให้แล้ว
         return NextResponse.redirect(new URL("/unauthorized", req.url))
       }
     }
 
-    // ─── ADMIN & SUPERADMIN ───────────────────────
-    const adminRoutes = ["/admin", "/booking", "/staff", "/schedule", "/review"]
+    // ── ADMIN & SUPERADMIN ─────────────────────────────────────
+    const adminRoutes = [
+      "/admin",       
+      "/booking",    
+      "/staff",
+      "/schedule",
+      "/review",     
+    ]
     if (adminRoutes.some((r) => pathname.startsWith(r))) {
       if (role !== "ADMIN" && role !== "SUPERADMIN") {
         return NextResponse.redirect(new URL("/unauthorized", req.url))
       }
     }
 
-    // ─── USER (login แล้วก็พอ) ───────────────────
+    // ── USER (login) ──────────────────────────────────
     const userRoutes = ["/profile", "/payment", "/history"]
     if (userRoutes.some((r) => pathname.startsWith(r))) {
       if (!role) {
@@ -33,10 +37,8 @@ export default withAuth(
 
     return NextResponse.next()
   },
-
   {
     callbacks: {
-      // ✅ ต้องมี token ถึงผ่านได้ — ไม่มี token redirect /login อัตโนมัติ
       authorized: ({ token }) => !!token,
     },
   }
@@ -47,11 +49,11 @@ export const config = {
     "/profile/:path*",
     "/payment/:path*",
     "/history/:path*",
-    "/admin/:path*",
-    "/booking/:path*",
+    "/admin/:path*",       
+    "/booking/:path*",     
     "/staff/:path*",
     "/schedule/:path*",
-    "/review/:path*",
+    "/review/:path*",      
     "/superadmin/:path*",
   ],
 }

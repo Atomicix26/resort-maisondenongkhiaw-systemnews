@@ -3,10 +3,6 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
-// ─────────────────────────────────────────────────────────────
-// POST — สร้างการจองใหม่
-// Body: { roomId, checkIn, checkOut, guests, totalPrice, specialRequest }
-// ─────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
@@ -20,9 +16,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Invalid body" }, { status: 400 })
   }
 
-  const { roomId, checkIn, checkOut, guests, totalPrice, specialRequest } = body
+  const { roomId, checkIn, checkOut, guests, specialRequest } = body
 
-  if (!roomId || !checkIn || !checkOut || !guests || !totalPrice) {
+  if (!roomId || !checkIn || !checkOut || !guests) {
     return NextResponse.json({ message: "ຂໍ້ມູນບໍ່ຄົບ" }, { status: 400 })
   }
 
@@ -34,48 +30,61 @@ export async function POST(request: NextRequest) {
   }
 
   if (checkInDate >= checkOutDate) {
-    return NextResponse.json({ message: "ວັນ Check-out ຕ້ອງຫຼັງຈາກ Check-in" }, { status: 400 })
+    return NextResponse.json({ message: "ວັນ Check-out ຕ້ອງຫຼັງ Check-in" }, { status: 400 })
+  }
+
+  const guestCount = Number(guests)
+  if (isNaN(guestCount) || guestCount < 1) {
+    return NextResponse.json({ message: "ຈຳນວນຜູ້ເຂົ້າພັກບໍ່ຖືກຕ້ອງ" }, { status: 400 })
   }
 
   try {
-    // ตรวจสอบห้อง
+    // ── ดึงข้อมูลห้องก่อน transaction (read-only) ────────────
     const room = await prisma.room.findUnique({ where: { id: roomId } })
+
     if (!room || !room.isActive) {
       return NextResponse.json({ message: "ບໍ່ພົບຫ້ອງ" }, { status: 404 })
     }
     if (room.status === "MAINTENANCE") {
       return NextResponse.json({ message: "ຫ້ອງນີ້ຢູ່ໃນລະຫວ່າງການສ້ອມແປງ" }, { status: 409 })
     }
-
-    // ตรวจ date conflict
-    const conflict = await prisma.booking.findFirst({
-      where: {
-        roomId,
-        status:   { notIn: ["CANCELLED"] },
-        checkIn:  { lt: checkOutDate },
-        checkOut: { gt: checkInDate  },
-        deletedAt: null,
-      },
-    })
-    if (conflict) {
+    if (guestCount > room.capacity) {
       return NextResponse.json(
-        { message: "ຫ້ອງນີ້ຖຶກຈອງໃນຊ່ວງວັນທີດັ່ງກ່າວແລ້ວ" },
-        { status: 409 }
+        { message: `ຫ້ອງນີ້ຮອງຮັບໄດ້ສູງສຸດ ${room.capacity} ທ່ານ` },
+        { status: 400 }
       )
     }
 
-    // ── สร้าง Booking + PaymentTransaction ใน transaction เดียว ──
+    const nights     = Math.ceil(
+      (checkOutDate.getTime() - checkInDate.getTime()) / 86400000
+    )
+    const totalPrice = Number(room.price) * nights
+
     const result = await prisma.$transaction(async (tx) => {
-      // 1. สร้าง Booking (ไม่มี paymentStatus อีกต่อไป)
+
+      const conflict = await tx.booking.findFirst({
+        where: {
+          roomId,
+          status:    { notIn: ["CANCELLED"] },
+          checkIn:   { lt: checkOutDate },
+          checkOut:  { gt: checkInDate  },
+          deletedAt: null,
+        },
+      })
+      if (conflict) {
+        throw new Error("ROOM_UNAVAILABLE")
+      }
+
+      // 2. สร้าง Booking ด้วยราคาที่คำนวณจาก server
       const booking = await tx.booking.create({
         data: {
           userId:         session.user.id,
           roomId,
           checkIn:        checkInDate,
           checkOut:       checkOutDate,
-          guests:         Number(guests),
-          totalPrice:     Number(totalPrice),
-          status:         "CONFIRMED",       // auto confirm
+          guests:         guestCount,
+          totalPrice,                      
+          status:         "CONFIRMED",
           specialRequest: specialRequest ?? null,
         },
         include: {
@@ -83,13 +92,12 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      // 2. สร้าง PaymentTransaction ที่ยังไม่ได้จ่าย
       const transaction = await tx.paymentTransaction.create({
         data: {
           bookingId: booking.id,
           type:      "CHARGE",
-          amount:    Number(totalPrice),
-          method:    "TRANSFER",          // default — user เลือกได้ทีหลัง
+          amount:    totalPrice,            // ✅ server-calculated
+          method:    "TRANSFER",
           status:    "PENDING",
         },
       })
@@ -98,22 +106,23 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json(
-      {
-        booking:     result.booking,
-        transaction: result.transaction,
-      },
+      { booking: result.booking, transaction: result.transaction },
       { status: 201 }
     )
 
   } catch (error) {
+    if (error instanceof Error && error.message === "ROOM_UNAVAILABLE") {
+      return NextResponse.json(
+        { message: "ຫ້ອງນີ້ຖຶກຈອງໃນຊ່ວງວັນທີດັ່ງກ່າວແລ້ວ" },
+        { status: 409 }
+      )
+    }
     console.error("[BOOKINGS_POST]", error)
     return NextResponse.json({ message: "Server error" }, { status: 500 })
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// GET — ดึงรายการจองของ user ที่ login อยู่
-// ─────────────────────────────────────────────────────────────
+// GET — user login
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
@@ -122,23 +131,14 @@ export async function GET() {
 
   try {
     const bookings = await prisma.booking.findMany({
-      where: {
-        userId:    session.user.id,
-        deletedAt: null,
-      },
+      where:   { userId: session.user.id, deletedAt: null },
       include: {
         room: {
-          select: {
-            id:      true,
-            name:    true,
-            images:  true,
-            view:    true,
-            bedType: true,
-          },
+          select: { id: true, name: true, images: true, view: true, bedType: true },
         },
         transactions: {
           orderBy: { createdAt: "desc" },
-          take: 1, // transaction ล่าสุด
+          take: 1,
         },
       },
       orderBy: { createdAt: "desc" },
@@ -146,17 +146,11 @@ export async function GET() {
 
     const parsed = bookings.map((b) => ({
       ...b,
-      totalPrice: Number(b.totalPrice),
-      room: {
-        ...b.room,
-        images: safeJson(b.room.images, []),
-      },
-      // สรุปสถานะการชำระจาก transaction ล่าสุด
-      paymentStatus:  b.transactions[0]?.status  ?? "PENDING",
-      paymentMethod:  b.transactions[0]?.method  ?? null,
-      paymentAmount:  b.transactions[0]
-        ? Number(b.transactions[0].amount)
-        : null,
+      totalPrice:    Number(b.totalPrice),
+      room:          { ...b.room, images: safeJson(b.room.images, []) },
+      paymentStatus: b.transactions[0]?.status ?? "PENDING",
+      paymentMethod: b.transactions[0]?.method ?? null,
+      paymentAmount: b.transactions[0] ? Number(b.transactions[0].amount) : null,
     }))
 
     return NextResponse.json({ bookings: parsed })
