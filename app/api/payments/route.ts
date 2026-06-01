@@ -6,6 +6,7 @@ import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import crypto from "crypto"
 
+// ✅ MIME whitelist + size limit
 const ALLOWED_MIME  = new Set(["image/jpeg", "image/png", "image/webp", "image/heic"])
 const MAX_FILE_SIZE = 5 * 1024 * 1024  // 5 MB
 const EXT_MAP: Record<string, string> = {
@@ -75,21 +76,23 @@ export async function POST(request: NextRequest) {
     }
 
     let newStatus: "PAID" | "PENDING_VERIFY" = "PAID"
-    let slipPath: string | null = null
+    // ✅ เก็บแค่ filename ไม่ใช่ path เต็ม
+    let slipFileName: string | null = null
 
-    // ── Bank Transfer ────────────────────────────────────────
     if (paymentMethod === "TRANSFER") {
       if (!slipFile) {
         return NextResponse.json({ message: "ກະລຸນາອັບໂຫຼດສລິບ" }, { status: 400 })
       }
 
+      // ✅ ตรวจ MIME type
       if (!ALLOWED_MIME.has(slipFile.type)) {
         return NextResponse.json(
-          { message: "ຮອງຮັບສະເພາະ JPG, PNG, WEBP เท่านั้น" },
+          { message: "ຮອງຮັບສະເພາະ JPG, PNG, WEBP" },
           { status: 400 }
         )
       }
 
+      // ✅ ตรวจ size
       if (slipFile.size > MAX_FILE_SIZE) {
         return NextResponse.json(
           { message: "ຂະໜາດໄຟລ໌ຕ້ອງບໍ່ເກີນ 5MB" },
@@ -99,20 +102,18 @@ export async function POST(request: NextRequest) {
 
       const bytes     = await slipFile.arrayBuffer()
       const buffer    = Buffer.from(bytes)
-
       const ext       = EXT_MAP[slipFile.type] ?? "jpg"
       const randomHex = crypto.randomBytes(16).toString("hex")
-      const fileName  = `slip_${randomHex}.${ext}`
+      slipFileName    = `slip_${randomHex}.${ext}`
 
-      const uploadDir = path.join(process.cwd(), "public", "uploads", "payment-slips")
+      // ✅ เก็บใน private/ — ไม่อยู่ใน public/ ใครก็ download ไม่ได้
+      const uploadDir = path.join(process.cwd(), "private", "uploads", "payment-slips")
       await mkdir(uploadDir, { recursive: true })
-      await writeFile(path.join(uploadDir, fileName), buffer)
+      await writeFile(path.join(uploadDir, slipFileName), buffer)
 
-      slipPath  = `/uploads/payment-slips/${fileName}`
       newStatus = "PENDING_VERIFY"
     }
 
-    // ── Credit Card ──────────────────────────────────────────
     if (paymentMethod === "CREDIT_CARD") {
       if (!cardNumber) {
         return NextResponse.json({ message: "ກະລຸນາປ້ອນເລກບັດ" }, { status: 400 })
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
       data: {
         method:      paymentMethod,
         status:      newStatus,
-        slipImage:   slipPath,
+        slipImage:   slipFileName,   // ✅ เก็บแค่ชื่อไฟล์
         paymentDate: new Date(),
       },
     })
@@ -164,7 +165,6 @@ export async function GET(request: NextRequest) {
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId, deletedAt: null },
     })
-
     if (!booking) {
       return NextResponse.json({ message: "ບໍ່ພົບ Booking" }, { status: 404 })
     }
@@ -182,7 +182,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       transactions: transactions.map((t) => ({ ...t, amount: Number(t.amount) })),
     })
-
   } catch (error) {
     console.error("[PAYMENT_GET]", error)
     return NextResponse.json({ message: "Server error" }, { status: 500 })
