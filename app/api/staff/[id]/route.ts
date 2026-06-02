@@ -17,21 +17,30 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (!staff) return NextResponse.json({ error: "ບໍ່ພົບພະນັກງານ" }, { status: 404 })
 
     const result = await prisma.$transaction(async (tx) => {
-      // อัปเดต User info
+      // ✅ ถ้า StaffRole เปลี่ยน → sync User.role ด้วย
+      const newStaffRole = role as StaffRole | undefined
+      const newUserRole =
+        newStaffRole === StaffRole.STAFF
+          ? "USER"
+          : newStaffRole !== undefined
+          ? "ADMIN"
+          : undefined
+
       await tx.user.update({
         where: { id: staff.userId },
         data: {
-          ...(name     !== undefined && { name }),
-          ...(lastName !== undefined && { lastName }),
-          ...(phone    !== undefined && { phone }),
+          ...(name        !== undefined && { name }),
+          ...(lastName    !== undefined && { lastName }),
+          ...(phone       !== undefined && { phone }),
+          ...(newUserRole !== undefined && { role: newUserRole }),
         },
       })
-      // อัปเดต Staff info
+
       return tx.staff.update({
         where: { id: params.id },
         data: {
           ...(position  !== undefined && { position }),
-          ...(role      !== undefined && { role: role as StaffRole }),
+          ...(role      !== undefined && { role: newStaffRole }),
           ...(salary    !== undefined && { salary: salary ? parseFloat(salary) : null }),
           ...(startDate !== undefined && { startDate: new Date(startDate) }),
         },
@@ -46,17 +55,36 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-// DELETE /api/staff/[id] — soft deactivate
+// DELETE /api/staff/[id]
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     if (session.user.role === "USER") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    await prisma.staff.update({
-      where: { id: params.id },
-      data:  { isActive: false },
+    const staff = await prisma.staff.findUnique({
+      where:  { id: params.id },
+      select: { userId: true },
     })
+    if (!staff) return NextResponse.json({ error: "ບໍ່ພົບພະນັກງານ" }, { status: 404 })
+
+    // ✅ ป้องกันลบตัวเอง
+    if (staff.userId === session.user.id) {
+      return NextResponse.json({ error: "ບໍ່ສາມາດລຶບຕົວເອງໄດ້" }, { status: 400 })
+    }
+
+    // ✅ transaction: deactivate + revoke role พร้อมกัน
+    await prisma.$transaction(async (tx) => {
+      await tx.staff.update({
+        where: { id: params.id },
+        data:  { isActive: false },
+      })
+      await tx.user.update({
+        where: { id: staff.userId },
+        data:  { role: "USER" },
+      })
+    })
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("[STAFF_DELETE]", error)
