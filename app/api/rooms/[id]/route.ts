@@ -4,6 +4,39 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { RoomStatus } from "@prisma/client"
 
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const room = await prisma.room.findUnique({
+      where: { id: params.id, deletedAt: null, isActive: true },
+      select: {
+        id: true, roomNumber: true, name: true, description: true,
+        price: true, capacity: true, bedType: true, size: true,
+        view: true, images: true, amenities: true,
+        status: true, featured: true,
+        roomType: { select: { typeName: true } },
+      },
+    })
+    if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
+    return NextResponse.json({
+      ...room,
+      price:     Number(room.price),
+      images:    tryParse(room.images as string | null, []),
+      amenities: tryParse(room.amenities as string | null, []),
+    })
+  } catch (error) {
+    console.error("[ROOM_GET_ID]", error)
+    return NextResponse.json({ error: "Failed" }, { status: 500 })
+  }
+}
+function tryParse(val: string | null, fallback: unknown) {
+  if (!val) return fallback
+  try { return JSON.parse(val) } catch { return fallback }
+}
+
 // PATCH /api/rooms/[id]
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {

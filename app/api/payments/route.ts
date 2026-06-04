@@ -6,14 +6,25 @@ import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import crypto from "crypto"
 
-// ✅ MIME whitelist + size limit
 const ALLOWED_MIME  = new Set(["image/jpeg", "image/png", "image/webp", "image/heic"])
-const MAX_FILE_SIZE = 5 * 1024 * 1024  // 5 MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024
 const EXT_MAP: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png":  "png",
   "image/webp": "webp",
   "image/heic": "heic",
+}
+
+// ✅ ลบ credit_card ออก + map status ให้ถูกต้อง
+const METHOD_MAP: Record<string, "TRANSFER" | "CASH"> = {
+  transfer:     "TRANSFER",
+  pay_at_hotel: "CASH",
+}
+
+// ✅ pay_at_hotel ยังไม่ได้จ่าย → PENDING (ไม่ใช่ PAID)
+const STATUS_MAP: Record<string, "PENDING_VERIFY" | "PENDING"> = {
+  transfer:     "PENDING_VERIFY",
+  pay_at_hotel: "PENDING",
 }
 
 export async function POST(request: NextRequest) {
@@ -29,13 +40,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Invalid form data" }, { status: 400 })
   }
 
-  const bookingId  = formData.get("bookingId")  as string
-  const method     = formData.get("method")     as string
-  const cardNumber = formData.get("cardNumber") as string | null
-  const slipFile   = formData.get("slipFile")  as File | null
+  // ✅ ลบ cardNumber ออก
+  const bookingId = formData.get("bookingId") as string
+  const method    = formData.get("method")    as string
+  const slipFile  = formData.get("slipFile")  as File | null
 
   if (!bookingId || !method) {
     return NextResponse.json({ message: "ຂໍ້ມູນບໍ່ຄົບ" }, { status: 400 })
+  }
+
+  const paymentMethod = METHOD_MAP[method]
+  if (!paymentMethod) {
+    return NextResponse.json({ message: "ວິທີຊຳລະບໍ່ຖືກຕ້ອງ" }, { status: 400 })
   }
 
   try {
@@ -50,54 +66,27 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    if (!booking) {
-      return NextResponse.json({ message: "ບໍ່ພົບລາຍການຈອງ" }, { status: 404 })
-    }
-    if (booking.userId !== session.user.id) {
-      return NextResponse.json({ message: "Forbidden" }, { status: 403 })
-    }
+    if (!booking) return NextResponse.json({ message: "ບໍ່ພົບລາຍການຈອງ" }, { status: 404 })
+    if (booking.userId !== session.user.id) return NextResponse.json({ message: "Forbidden" }, { status: 403 })
 
     const pendingTx = booking.transactions[0]
-    if (!pendingTx) {
-      return NextResponse.json({ message: "ບໍ່ພົບລາຍການຊຳລະ" }, { status: 404 })
-    }
-    if (pendingTx.status === "PAID" || pendingTx.status === "PENDING_VERIFY") {
+    if (!pendingTx) return NextResponse.json({ message: "ບໍ່ພົບລາຍການຊຳລະ" }, { status: 404 })
+    if (["PAID", "PENDING_VERIFY"].includes(pendingTx.status)) {
       return NextResponse.json({ message: "ຊຳລະເງິນໄປແລ້ວ" }, { status: 409 })
     }
 
-    const methodMap: Record<string, "TRANSFER" | "CREDIT_CARD" | "CASH"> = {
-      transfer:    "TRANSFER",
-      credit_card: "CREDIT_CARD",
-      cash:        "CASH",
-    }
-    const paymentMethod = methodMap[method]
-    if (!paymentMethod) {
-      return NextResponse.json({ message: "ວິທີຊຳລະບໍ່ຖືກຕ້ອງ" }, { status: 400 })
-    }
-
-    let newStatus: "PAID" | "PENDING_VERIFY" = "PAID"
-    // ✅ เก็บแค่ filename ไม่ใช่ path เต็ม
     let slipFileName: string | null = null
 
-    if (paymentMethod === "TRANSFER") {
+    // ── Bank Transfer: ต้องมีสลิป ──────────────────────────────
+    if (method === "transfer") {
       if (!slipFile) {
         return NextResponse.json({ message: "ກະລຸນາອັບໂຫຼດສລິບ" }, { status: 400 })
       }
-
-      // ✅ ตรวจ MIME type
       if (!ALLOWED_MIME.has(slipFile.type)) {
-        return NextResponse.json(
-          { message: "ຮອງຮັບສະເພາະ JPG, PNG, WEBP" },
-          { status: 400 }
-        )
+        return NextResponse.json({ message: "ຮອງຮັບສະເພາະ JPG, PNG, WEBP" }, { status: 400 })
       }
-
-      // ✅ ตรวจ size
       if (slipFile.size > MAX_FILE_SIZE) {
-        return NextResponse.json(
-          { message: "ຂະໜາດໄຟລ໌ຕ້ອງບໍ່ເກີນ 5MB" },
-          { status: 400 }
-        )
+        return NextResponse.json({ message: "ຂະໜາດໄຟລ໌ຕ້ອງບໍ່ເກີນ 5MB" }, { status: 400 })
       }
 
       const bytes     = await slipFile.arrayBuffer()
@@ -106,31 +95,20 @@ export async function POST(request: NextRequest) {
       const randomHex = crypto.randomBytes(16).toString("hex")
       slipFileName    = `slip_${randomHex}.${ext}`
 
-      // ✅ เก็บใน private/ — ไม่อยู่ใน public/ ใครก็ download ไม่ได้
       const uploadDir = path.join(process.cwd(), "private", "uploads", "payment-slips")
       await mkdir(uploadDir, { recursive: true })
       await writeFile(path.join(uploadDir, slipFileName), buffer)
-
-      newStatus = "PENDING_VERIFY"
     }
 
-    if (paymentMethod === "CREDIT_CARD") {
-      if (!cardNumber) {
-        return NextResponse.json({ message: "ກະລຸນາປ້ອນເລກບັດ" }, { status: 400 })
-      }
-      const clean = cardNumber.replace(/\s/g, "")
-      if (!/^\d{16}$/.test(clean)) {
-        return NextResponse.json({ message: "ເລກບັດຕ້ອງມີ 16 ຕົວ" }, { status: 400 })
-      }
-    }
-
+    // ── Pay at Hotel: ไม่ต้องมีสลิป ────────────────────────────
     const updated = await prisma.paymentTransaction.update({
       where: { id: pendingTx.id },
       data: {
         method:      paymentMethod,
-        status:      newStatus,
-        slipImage:   slipFileName,   // ✅ เก็บแค่ชื่อไฟล์
-        paymentDate: new Date(),
+        status:      STATUS_MAP[method],
+        slipImage:   slipFileName,
+        // ✅ pay_at_hotel ยังไม่ได้จ่าย → paymentDate เป็น null
+        paymentDate: method === "transfer" ? new Date() : null,
       },
     })
 
@@ -139,9 +117,9 @@ export async function POST(request: NextRequest) {
       transactionId: updated.id,
       status:        updated.status,
       message:
-        paymentMethod === "TRANSFER"
+        method === "transfer"
           ? "ອັບໂຫຼດສລິບສຳເລັດ — ກຳລັງລໍຖ້າ Admin ກວດສອບ"
-          : "ຊຳລະເງິນສຳເລັດ",
+          : "ຈອງສຳເລັດ — ຊຳລະໄດ້ທີ່ Hotel ໃນວັນ Check-in",
     })
 
   } catch (error) {
@@ -162,12 +140,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId, deletedAt: null },
-    })
-    if (!booking) {
-      return NextResponse.json({ message: "ບໍ່ພົບ Booking" }, { status: 404 })
-    }
+    const booking = await prisma.booking.findUnique({ where: { id: bookingId, deletedAt: null } })
+    if (!booking) return NextResponse.json({ message: "ບໍ່ພົບ Booking" }, { status: 404 })
 
     const isAdmin = session.user.role === "ADMIN" || session.user.role === "SUPERADMIN"
     if (booking.userId !== session.user.id && !isAdmin) {
