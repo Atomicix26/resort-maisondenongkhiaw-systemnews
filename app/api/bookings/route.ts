@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
           checkOut:       checkOutDate,
           guests:         guestCount,
           totalPrice,                      
-          status:         "CONFIRMED",
+          status:         "PENDING",
           specialRequest: specialRequest ?? null,
         },
         include: {
