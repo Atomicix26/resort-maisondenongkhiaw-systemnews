@@ -6,20 +6,25 @@ export default withAuth(
     const { pathname } = req.nextUrl
     const role = req.nextauth.token?.role as string | undefined
 
-    // ── SUPERADMIN only ────────────────────────────────────────
-    if (pathname.startsWith("/superadmin")) {
+    // ── SUPERADMIN เท่านั้น ─────────────────────────────────────────
+    // รวม /booking (room management) เข้ามาด้วย — Admin ไม่มีสิทธิ์แล้ว
+    const superRoutes = [
+      "/superadmin",
+      "/booking",           // ← ย้ายจาก adminRoutes มา SuperAdmin
+    ]
+    if (superRoutes.some((r) => pathname.startsWith(r))) {
       if (role !== "SUPERADMIN") {
         return NextResponse.redirect(new URL("/unauthorized", req.url))
       }
     }
 
-    // ── ADMIN & SUPERADMIN ─────────────────────────────────────
+    // ── ADMIN & SUPERADMIN ───────────────────────────────────────────
+    // ลบ /booking ออก — Admin จัดการแค่ staff, schedule, review
     const adminRoutes = [
-      "/admin",       
-      "/booking",    
+      "/admin",
       "/staff",
       "/schedule",
-      "/review",     
+      "/review",
     ]
     if (adminRoutes.some((r) => pathname.startsWith(r))) {
       if (role !== "ADMIN" && role !== "SUPERADMIN") {
@@ -27,7 +32,7 @@ export default withAuth(
       }
     }
 
-    // ── USER (login) ──────────────────────────────────
+    // ── USER (ต้อง login) ────────────────────────────────────────────
     const userRoutes = ["/profile", "/payment", "/history"]
     if (userRoutes.some((r) => pathname.startsWith(r))) {
       if (!role) {
@@ -49,11 +54,11 @@ export const config = {
     "/profile/:path*",
     "/payment/:path*",
     "/history/:path*",
-    "/admin/:path*",       
-    "/booking/:path*",     
+    "/admin/:path*",
+    "/booking/:path*",     // SuperAdmin only
     "/staff/:path*",
     "/schedule/:path*",
-    "/review/:path*",      
+    "/review/:path*",
     "/superadmin/:path*",
   ],
 }
