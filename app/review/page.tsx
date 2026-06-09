@@ -109,10 +109,15 @@ export default function ReviewPage() {
         <nav className="flex-1 p-3 space-y-0.5">
           {[
             { href: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-            { href: "/booking",         icon: CalendarDays,    label: "ການຈອງ"    },
-            { href: "/staff",           icon: Users,           label: "ພະນັກງານ"  },
-            { href: "/schedule",        icon: BookOpen,        label: "ຕາຕະລາງ"  },
-            { href: "/review",          icon: Star,            label: "ລີວິວ",    active: true },
+            ...(session?.user?.role === "SUPERADMIN"
+              ? [
+                  { href: "/booking", icon: CalendarDays, label: "ຫ້ອງພັກ" },
+                  { href: "/staff",   icon: Users,        label: "ພະນັກງານ" },
+                ]
+              : []),
+            { href: "/admin/room-status", icon: CalendarDays, label: "Room Status" },
+            { href: "/schedule", icon: BookOpen, label: "ຕາຕະລາງ" },
+            { href: "/review",   icon: Star,     label: "ລີວິວ", active: true },
           ].map(({ href, icon: Icon, label, active }) => (
             <Link key={href} href={href}
               className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] transition-colors

@@ -4,8 +4,12 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { PaymentStatus } from "@prisma/client"
 
+type Params = { params: Promise<{ id: string }> }
+
 // PATCH /api/admin/payments/[id]/verify
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: Params) {
+  const { id } = await params
+
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -19,7 +23,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const staff = await prisma.staff.findFirst({ where: { userId: session.user.id } })
 
     const tx = await prisma.paymentTransaction.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status:      status as PaymentStatus,
         verifiedAt:  new Date(),

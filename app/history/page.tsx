@@ -310,7 +310,9 @@ export default function HistoryPage() {
   }
 
   useEffect(() => {
-    if (status === "authenticated") fetchBookings()
+    if (status !== "authenticated") return
+    const timer = window.setTimeout(() => { void fetchBookings() }, 0)
+    return () => window.clearTimeout(timer)
   }, [status])
 
   // filter + search

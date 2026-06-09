@@ -4,22 +4,26 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Role } from "@prisma/client"
 
+type Params = { params: Promise<{ id: string }> }
+
 // PATCH /api/superadmin/users/[id] — เปลี่ยน role / soft delete
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: Params) {
+  const { id } = await params
+
   try {
     const session = await getServerSession(authOptions)
     if (session?.user?.role !== "SUPERADMIN")
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     // ห้ามแก้ตัวเอง
-    if (params.id === session.user.id)
+    if (id === session.user.id)
       return NextResponse.json({ error: "ບໍ່ສາມາດແກ້ໄຂຕົວເອງໄດ້" }, { status: 400 })
 
     const { role, deletedAt } = await request.json()
 
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           ...(role      !== undefined && { role: role as Role }),
           ...(deletedAt !== undefined && { deletedAt: deletedAt ? new Date(deletedAt) : null }),
@@ -29,17 +33,17 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       // ถ้า downgrade จาก ADMIN → USER → deactivate staff ด้วย
       if (role === "USER") {
         await tx.staff.updateMany({
-          where: { userId: params.id },
+          where: { userId: id },
           data:  { isActive: false },
         })
       }
       // ถ้า upgrade เป็น ADMIN → สร้าง Staff ถ้ายังไม่มี
       if (role === "ADMIN") {
-        const existing = await tx.staff.findFirst({ where: { userId: params.id } })
+        const existing = await tx.staff.findFirst({ where: { userId: id } })
         if (!existing) {
-          await tx.staff.create({ data: { userId: params.id } })
+          await tx.staff.create({ data: { userId: id } })
         } else {
-          await tx.staff.updateMany({ where: { userId: params.id }, data: { isActive: true } })
+          await tx.staff.updateMany({ where: { userId: id }, data: { isActive: true } })
         }
       }
 
@@ -54,17 +58,19 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 }
 
 // DELETE /api/superadmin/users/[id] — soft delete
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: Params) {
+  const { id } = await params
+
   try {
     const session = await getServerSession(authOptions)
     if (session?.user?.role !== "SUPERADMIN")
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    if (params.id === session.user.id)
+    if (id === session.user.id)
       return NextResponse.json({ error: "ບໍ່ສາມາດລຶບຕົວເອງໄດ້" }, { status: 400 })
 
     await prisma.user.update({
-      where: { id: params.id },
+      where: { id },
       data:  { deletedAt: new Date() },
     })
     return NextResponse.json({ success: true })

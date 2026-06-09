@@ -173,7 +173,10 @@ export default function ProfilePage() {
     }
   }, [])
 
-  useEffect(() => { fetchRooms() }, [fetchRooms])
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void fetchRooms() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [fetchRooms])
   useEffect(() => {
     const t = setTimeout(() => fetchRooms(search), 400)
     return () => clearTimeout(t)

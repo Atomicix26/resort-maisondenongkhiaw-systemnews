@@ -10,7 +10,7 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if (session.user.role === "USER") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (session.user.role !== "SUPERADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const staff = await prisma.staff.findMany({
       where:   { isActive: true },
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if (session.user.role === "USER") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (session.user.role !== "SUPERADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const { name, lastName, email, phone, password, position, role, salary, startDate } =
       await request.json()

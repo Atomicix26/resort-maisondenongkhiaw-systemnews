@@ -36,11 +36,16 @@ const BOOKING_STATUS: Record<string, { label: string; color: string }> = {
 }
 
 // ── Sidebar ──────────────────────────────────────────────────────
-function Sidebar({ active }: { active: string }) {
+function Sidebar({ active, role }: { active: string; role?: string }) {
   const nav = [
     { href: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/booking",         icon: CalendarDays,    label: "ການຈອງ"   },
-    { href: "/staff",           icon: Users,           label: "ພະນັກງານ" },
+    ...(role === "SUPERADMIN"
+      ? [
+          { href: "/booking", icon: CalendarDays, label: "ຫ້ອງພັກ" },
+          { href: "/staff",   icon: Users,        label: "ພະນັກງານ" },
+        ]
+      : []),
+    { href: "/admin/room-status", icon: BedDouble, label: "Room Status" },
     { href: "/schedule",        icon: BookOpen,        label: "ຕາຕະລາງ" },
     { href: "/review",          icon: Star,            label: "ລີວິວ"    },
   ]
@@ -130,7 +135,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex font-lao">
-      <Sidebar active="/admin/dashboard" />
+      <Sidebar active="/admin/dashboard" role={session?.user?.role} />
 
       <main className="flex-1 ml-56 p-8">
         {/* Header */}

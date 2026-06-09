@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getEffectiveNightlyPrice } from "@/lib/pricing"
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -58,7 +59,8 @@ export async function POST(request: NextRequest) {
     const nights     = Math.ceil(
       (checkOutDate.getTime() - checkInDate.getTime()) / 86400000
     )
-    const totalPrice = Number(room.price) * nights
+    const pricing = await getEffectiveNightlyPrice(room, checkInDate, checkOutDate)
+    const totalPrice = pricing.nightlyPrice * nights
 
     const result = await prisma.$transaction(async (tx) => {
 

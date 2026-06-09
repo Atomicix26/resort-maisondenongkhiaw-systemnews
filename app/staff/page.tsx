@@ -227,7 +227,11 @@ export default function StaffPage() {
     finally  { setLoading(false) }
   }, [])
 
-  useEffect(() => { if (status === "authenticated") fetchStaff() }, [status, fetchStaff])
+  useEffect(() => {
+    if (status !== "authenticated") return
+    const timer = window.setTimeout(() => { void fetchStaff() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [status, fetchStaff])
 
   async function handleDelete(id: string) {
     setDeleting(true)

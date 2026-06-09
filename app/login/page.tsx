@@ -5,7 +5,7 @@ import Link     from "next/link"
 import { useState }                from "react"
 import { signIn, getSession }      from "next-auth/react"
 import { useRouter }               from "next/navigation"
-import { getRedirectByRole }       from "@/lib/auth"
+import { getRedirectByRole }       from "@/lib/routes"
 
 export default function LoginPage() {
   const router = useRouter()

@@ -73,7 +73,7 @@ function PriceDisplay({ lak, currency }: { lak: number; currency: Currency }) {
 export default function PaymentContent() {
   const router  = useRouter()
   const params  = useSearchParams()
-  const { data: session, status } = useSession()
+  const { status } = useSession()
 
   const roomId   = params.get("roomId")   ?? ""
   const checkIn  = params.get("checkIn")  ?? ""
@@ -100,7 +100,8 @@ export default function PaymentContent() {
   // ✅ ดึงแค่ห้องเดียว ไม่ดึงทั้งหมด
   useEffect(() => {
     if (!roomId) return
-    fetch(`/api/rooms/${roomId}`)
+    const q = new URLSearchParams({ checkIn, checkOut })
+    fetch(`/api/rooms/${roomId}?${q.toString()}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => setRoom(data ?? null))
       .catch(() => setRoom(null))
@@ -459,6 +460,7 @@ export default function PaymentContent() {
                       className="border-2 border-dashed border-gray-200 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all min-h-[110px]">
                       {slipPreview ? (
                         <div className="relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={slipPreview} alt="slip" className="max-h-24 rounded-lg object-contain"/>
                           <button onClick={(e) => {
                             e.stopPropagation()

@@ -12,6 +12,13 @@ export async function GET(request: NextRequest) {
     const featured = searchParams.get("featured")
     const all      = searchParams.get("all")       // admin ต้องการทุกห้อง
 
+    if (all === "true") {
+      const session = await getServerSession(authOptions)
+      if (session?.user?.role !== "SUPERADMIN") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      }
+    }
+
     const rooms = await prisma.room.findMany({
       where: {
         deletedAt: null,
@@ -27,6 +34,7 @@ export async function GET(request: NextRequest) {
       },
       select: {
         id: true, roomNumber: true, name: true, description: true,
+        roomTypeId: true,
         price: true, capacity: true, bedType: true, size: true,
         view: true, images: true, amenities: true,
         status: true, featured: true, isActive: true,
@@ -56,7 +64,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if (session.user.role === "USER") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (session.user.role !== "SUPERADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const body = await request.json()
     const { roomNumber, name, description, price, capacity, bedType, size, view,

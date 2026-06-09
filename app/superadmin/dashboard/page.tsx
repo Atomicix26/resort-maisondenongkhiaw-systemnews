@@ -53,8 +53,12 @@ function Sidebar({ active }: { active: string }) {
         <nav className="mt-3 px-3 space-y-0.5">
           {[
             { icon: Activity,   label: "Dashboard",      path: "/superadmin/dashboard", active: active === "dashboard" },
-            { icon: Users,      label: "ຈັດການ Users",   path: "/superadmin/users",    active: active === "users"    },
-            { icon: Clock,      label: "Access Logs",    path: "/superadmin/logs",     active: active === "logs"     },
+            { icon: Users,      label: "Staff",          path: "/staff",                active: active === "staff"    },
+            { icon: BedDouble,  label: "Room",           path: "/booking",              active: active === "rooms"    },
+            { icon: BedDouble,  label: "Room Type",      path: "/superadmin/room-types", active: active === "roomTypes" },
+            { icon: TrendingUp, label: "Price Config",   path: "/superadmin/price-config", active: active === "priceConfig" },
+            { icon: Activity,   label: "Reports",        path: "/superadmin/reports",   active: active === "reports"  },
+            { icon: Clock,      label: "Access Logs",    path: "/superadmin/logs",      active: active === "logs"     },
           ].map(({ icon: Icon, label, path, active: isActive }) => (
             <a key={path} href={path}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[12px] font-medium transition-all
@@ -126,7 +130,11 @@ export default function SuperAdminDashboard() {
     finally  { setLoadUsers(false) }
   }, [filterRole])
 
-  useEffect(() => { if (status === "authenticated") fetchUsers() }, [status, fetchUsers])
+  useEffect(() => {
+    if (status !== "authenticated") return
+    const timer = window.setTimeout(() => { void fetchUsers() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [status, fetchUsers])
 
   async function changeRole(userId: string, newRole: Role) {
     if (!confirm(`ປ່ຽນ role ເປັນ ${ROLE_CFG[newRole].label}?`)) return

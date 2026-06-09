@@ -11,6 +11,7 @@ export default withAuth(
     const superRoutes = [
       "/superadmin",
       "/booking",           // ← ย้ายจาก adminRoutes มา SuperAdmin
+      "/staff",
     ]
     if (superRoutes.some((r) => pathname.startsWith(r))) {
       if (role !== "SUPERADMIN") {
@@ -22,7 +23,6 @@ export default withAuth(
     // ลบ /booking ออก — Admin จัดการแค่ staff, schedule, review
     const adminRoutes = [
       "/admin",
-      "/staff",
       "/schedule",
       "/review",
     ]
@@ -56,7 +56,7 @@ export const config = {
     "/history/:path*",
     "/admin/:path*",
     "/booking/:path*",     // SuperAdmin only
-    "/staff/:path*",
+    "/staff/:path*",       // SuperAdmin only
     "/schedule/:path*",
     "/review/:path*",
     "/superadmin/:path*",

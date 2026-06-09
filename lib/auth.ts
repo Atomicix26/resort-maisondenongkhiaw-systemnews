@@ -35,10 +35,14 @@ export const authOptions: NextAuthOptions = {
           // ── ตรวจสอบ user ─────────────────────────────────────────
           const user = await prisma.user.findUnique({
             where:  { email: credentials.email },
-            select: { id: true, email: true, name: true, password: true, role: true, deletedAt: true },
+            select: {
+              id: true, email: true, name: true, password: true, role: true, deletedAt: true,
+              staff: { select: { isActive: true } },
+            },
           })
 
           if (!user || user.deletedAt) return null
+          if (user.role === "ADMIN" && user.staff && !user.staff.isActive) return null
 
           const isValid = await bcrypt.compare(credentials.password, user.password)
           if (!isValid) return null
@@ -85,10 +89,4 @@ export const authOptions: NextAuthOptions = {
   secret:  process.env.NEXTAUTH_SECRET,
 }
 
-export function getRedirectByRole(role: string): string {
-  switch (role) {
-    case "SUPERADMIN": return "/superadmin/dashboard"
-    case "ADMIN":      return "/admin/dashboard"
-    default:           return "/profile"
-  }
-}
+export { getRedirectByRole } from "@/lib/routes"

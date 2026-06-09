@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   BedDouble, CalendarCheck2, CalendarDays, Star, LogOut,
-  LayoutDashboard, Plus, Check, X, MoreHorizontal,
+  LayoutDashboard, Plus, X, MoreHorizontal,
   ArrowUpDown, Loader2, RefreshCw, Search,
 } from "lucide-react"
 
@@ -221,7 +221,11 @@ export default function BookingAdminPage() {
     finally  { setLoading(false) }
   }, [])
 
-  useEffect(() => { if (status === "authenticated") fetchRooms() }, [status, fetchRooms])
+  useEffect(() => {
+    if (status !== "authenticated") return
+    const timer = window.setTimeout(() => { void fetchRooms() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [status, fetchRooms])
 
   async function handleDelete(id: string) {
     if (!confirm("ຢືນຢັນລຶບຫ້ອງນີ້?")) return

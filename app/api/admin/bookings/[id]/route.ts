@@ -4,8 +4,12 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { BookingStatus, RoomStatus } from "@prisma/client"
 
+type Params = { params: Promise<{ id: string }> }
+
 // PATCH /api/admin/bookings/[id] — เปลี่ยน status + check-in/out
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: Params) {
+  const { id } = await params
+
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -14,7 +18,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const { status, actualCheckIn, actualCheckOut, checkInRemarks, checkOutRemarks } = await request.json()
 
     const booking = await prisma.booking.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { room: true },
     })
     if (!booking) return NextResponse.json({ error: "ບໍ່ພົບ booking" }, { status: 404 })
@@ -40,7 +44,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const updated = await prisma.$transaction(async (tx) => {
       // อัปเดต Booking
       const b = await tx.booking.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           ...(status         && { status: status as BookingStatus }),
           ...(actualCheckIn  && { actualCheckIn: new Date(actualCheckIn), checkInStaffId: staff?.id }),
@@ -58,13 +62,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       // Log check-in
       if (actualCheckIn && staff) {
         await tx.checkInLog.create({
-          data: { bookingId: params.id, staffId: staff.id, actualTime: new Date(actualCheckIn), remarks: checkInRemarks },
+          data: { bookingId: id, staffId: staff.id, actualTime: new Date(actualCheckIn), remarks: checkInRemarks },
         })
       }
       // Log check-out
       if (actualCheckOut && staff) {
         await tx.checkOutLog.create({
-          data: { bookingId: params.id, staffId: staff.id, actualTime: new Date(actualCheckOut), remarks: checkOutRemarks },
+          data: { bookingId: id, staffId: staff.id, actualTime: new Date(actualCheckOut), remarks: checkOutRemarks },
         })
       }
 
@@ -84,8 +88,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       // อัปเดต BookAppr ถ้ามี
       if (status === "CONFIRMED" || status === "CANCELLED") {
         await tx.bookAppr.upsert({
-          where:  { bookingId: params.id },
-          create: { bookingId: params.id, staffId: staff?.id, status: status === "CONFIRMED" ? "APPROVED" : "REJECTED", apprDate: new Date() },
+          where:  { bookingId: id },
+          create: { bookingId: id, staffId: staff?.id, status: status === "CONFIRMED" ? "APPROVED" : "REJECTED", apprDate: new Date() },
           update: { staffId: staff?.id, status: status === "CONFIRMED" ? "APPROVED" : "REJECTED", apprDate: new Date() },
         })
       }

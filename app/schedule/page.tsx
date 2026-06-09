@@ -55,7 +55,20 @@ const TRANSITIONS: Record<BookingStatus, { status: BookingStatus; label: string;
 }
 
 // ── Sidebar ──────────────────────────────────────────────────────
-function Sidebar({ active }: { active: string }) {
+function Sidebar({ active, role }: { active: string; role?: string }) {
+  const nav = [
+    { icon: LayoutDashboard, label: "Dashboard", path: "/admin/dashboard" },
+    ...(role === "SUPERADMIN"
+      ? [
+          { icon: BedDouble,      label: "ຈັດການຫ້ອງ",     path: "/booking" },
+          { icon: CalendarCheck2, label: "ຈັດການພະນັກງານ", path: "/staff" },
+        ]
+      : []),
+    { icon: BedDouble, label: "Room Status", path: "/admin/room-status" },
+    { icon: CalendarDays, label: "ຈັດການການຈອງ", path: "/schedule" },
+    { icon: Star,         label: "ຈັດການລີວິວ",  path: "/review" },
+  ]
+
   return (
     <aside className="w-[210px] min-h-screen bg-[#1E1040] flex flex-col justify-between fixed left-0 top-0 z-40">
       <div>
@@ -64,13 +77,7 @@ function Sidebar({ active }: { active: string }) {
           <p className="text-white font-bold text-[14px] mt-0.5">Resort MDNK1</p>
         </div>
         <nav className="mt-3 px-3 space-y-0.5">
-          {[
-            { icon: LayoutDashboard, label: "Dashboard",       path: "/admin/dashboard" },
-            { icon: BedDouble,       label: "ຈັດການຫ້ອງ",     path: "/booking"         },
-            { icon: CalendarCheck2,  label: "ຈັດການພະນັກງານ", path: "/staff"           },
-            { icon: CalendarDays,    label: "ຈັດການການຈອງ",   path: "/schedule"        },
-            { icon: Star,            label: "ຈັດການລີວິວ",    path: "/review"          },
-          ].map(({ icon: Icon, label, path }) => (
+          {nav.map(({ icon: Icon, label, path }) => (
             <Link key={path} href={path}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[12px] font-medium transition-all
                 ${active === path
@@ -193,7 +200,7 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
               <span className="text-[12px] font-mono text-gray-700">{Number(tx.amount).toLocaleString()} ₭</span>
             </div>
             {tx.slipImage && (
-              <a href={tx.slipImage} target="_blank" rel="noreferrer"
+              <a href={`/api/slips/${encodeURIComponent(tx.slipImage)}`} target="_blank" rel="noreferrer"
                 className="mt-2 flex items-center gap-1.5 text-[11px] text-blue-500 hover:underline">
                 <Eye size={11} /> ເບິ່ງ slip
               </a>
@@ -236,7 +243,7 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
         {/* Action buttons */}
         {TRANSITIONS[booking.status].length > 0 && (
           <div className="flex gap-2">
-            {TRANSITIONS[booking.status].map(({ status, label, color, icon: Icon }) => (
+            {TRANSITIONS[booking.status].map(({ status, label, icon: Icon }) => (
               <button key={status} disabled={!!saving}
                 onClick={() => changeStatus(status)}
                 className={`flex-1 py-2.5 rounded-xl text-[12px] font-bold border-2 flex items-center justify-center gap-1.5
@@ -287,7 +294,11 @@ export default function SchedulePage() {
     finally  { setLoading(false) }
   }, [filterSt])
 
-  useEffect(() => { if (status === "authenticated") fetchBookings() }, [status, fetchBookings])
+  useEffect(() => {
+    if (status !== "authenticated") return
+    const timer = window.setTimeout(() => { void fetchBookings() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [status, fetchBookings])
 
   const filtered = bookings.filter((b) => {
     if (!search) return true
@@ -312,7 +323,7 @@ export default function SchedulePage() {
 
   return (
     <div className="flex min-h-screen bg-[#F4F5F7] font-lao">
-      <Sidebar active="/schedule" />
+      <Sidebar active="/schedule" role={session?.user?.role} />
 
       <main className="ml-[210px] flex-1 flex flex-col">
         <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-30">

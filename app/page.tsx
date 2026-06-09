@@ -60,7 +60,10 @@ export default function Home() {
     }
   }, [])
 
-  useEffect(() => { fetchRooms() }, [fetchRooms])
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void fetchRooms() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [fetchRooms])
 
   // ── Search debounce ─────────────────────────────────────────
   useEffect(() => {

@@ -4,11 +4,15 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { StaffRole, Role } from "@prisma/client";
 
+type Params = { params: Promise<{ id: string }> };
+
 // PATCH /api/staff/[id]
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: Params,
 ) {
+  const { id } = await params;
+
   try {
     const session = await getServerSession(authOptions);
 
@@ -16,7 +20,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role === "USER") {
+    if (session.user.role !== "SUPERADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -24,7 +28,7 @@ export async function PATCH(
       await request.json();
 
     const staff = await prisma.staff.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!staff) {
@@ -61,7 +65,7 @@ export async function PATCH(
       });
 
       return tx.staff.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           ...(position !== undefined && { position }),
           ...(role !== undefined && { role: newStaffRole }),
@@ -101,8 +105,10 @@ export async function PATCH(
 // DELETE /api/staff/[id]
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: Params,
 ) {
+  const { id } = await params;
+
   try {
     const session = await getServerSession(authOptions);
 
@@ -110,12 +116,12 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role === "USER") {
+    if (session.user.role !== "SUPERADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const staff = await prisma.staff.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { userId: true },
     });
 
@@ -146,7 +152,7 @@ export async function DELETE(
 
     await prisma.$transaction(async (tx) => {
       await tx.staff.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           isActive: false,
         },
