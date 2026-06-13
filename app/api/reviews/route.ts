@@ -11,23 +11,24 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { roomId, rating, comment } = body
+    const { bookingId, roomId: requestedRoomId, rating, comment } = body
+    const parsedRating = Number(rating)
 
-    if (!roomId || !rating) {
-      return NextResponse.json({ error: "Room ID and rating are required" }, { status: 400 })
+    if (!bookingId && !requestedRoomId) {
+      return NextResponse.json({ error: "bookingId or roomId is required" }, { status: 400 })
     }
-    if (rating < 1 || rating > 5) {
+    if (!Number.isInteger(parsedRating) || parsedRating < 1 || parsedRating > 5) {
       return NextResponse.json({ error: "Rating must be between 1 and 5" }, { status: 400 })
     }
 
-    // ✅ เช็คเฉพาะ COMPLETED เท่านั้น (checkout จริงแล้ว)
     const completedBooking = await prisma.booking.findFirst({
       where: {
-        userId:   session.user.id,
-        roomId,
-        status:   "COMPLETED",
+        userId: session.user.id,
+        ...(bookingId ? { id: bookingId } : { roomId: requestedRoomId }),
+        status: "COMPLETED",
         deletedAt: null,
       },
+      select: { id: true },
     })
     if (!completedBooking) {
       return NextResponse.json(
@@ -36,23 +37,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ✅ เช็ค soft delete ด้วย
     const existingReview = await prisma.review.findFirst({
-      where: { userId: session.user.id, roomId, deletedAt: null },
+      where: { bookingId: completedBooking.id, deletedAt: null },
     })
 
     if (existingReview) {
       const review = await prisma.review.update({
         where: { id: existingReview.id },
-        data:  { rating, comment, updatedAt: new Date() },
+        data: {
+          rating: parsedRating,
+          comment,
+          updatedAt: new Date(),
+        },
       })
       return NextResponse.json({ review })
     }
 
-    // ✅ สร้าง Review + ReviewManage พร้อมกัน (transaction)
     const review = await prisma.$transaction(async (tx) => {
       const newReview = await tx.review.create({
-        data: { userId: session.user.id, roomId, rating, comment },
+        data: {
+          bookingId: completedBooking.id,
+          rating: parsedRating,
+          comment,
+        },
       })
       await tx.reviewManage.create({
         data: { reviewId: newReview.id, status: "PENDING" },
@@ -76,15 +83,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Room ID is required" }, { status: 400 })
     }
 
-    // ✅ filter soft delete
-    const reviews = await prisma.review.findMany({
-      where: { roomId, deletedAt: null },
+    const rows = await prisma.review.findMany({
+      where: {
+        deletedAt: null,
+        booking: { roomId, deletedAt: null },
+      },
       include: {
-        user: { select: { name: true, lastName: true } },
+        booking: {
+          select: {
+            id: true,
+            checkIn: true,
+            checkOut: true,
+            status: true,
+            user: { select: { name: true, lastName: true } },
+            room: { select: { id: true, name: true } },
+          },
+        },
         management: { select: { status: true, reply: true } },
       },
       orderBy: { createdAt: "desc" },
     })
+
+    const reviews = rows.map((review) => ({
+      ...review,
+      user: review.booking.user,
+      room: review.booking.room,
+    }))
 
     return NextResponse.json({ reviews })
   } catch (error) {

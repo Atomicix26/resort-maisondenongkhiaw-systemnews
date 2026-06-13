@@ -10,15 +10,29 @@ export async function GET() {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     if (session.user.role === "USER") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const reviews = await prisma.review.findMany({
+    const rows = await prisma.review.findMany({
       where:   { deletedAt: null },
       include: {
-        user:       { select: { name: true, lastName: true } },
-        room:       { select: { name: true } },
+        booking: {
+          select: {
+            id: true,
+            checkIn: true,
+            checkOut: true,
+            status: true,
+            user: { select: { name: true, lastName: true } },
+            room: { select: { name: true } },
+          },
+        },
         management: true,
       },
       orderBy: { createdAt: "desc" },
     })
+
+    const reviews = rows.map((review) => ({
+      ...review,
+      user: review.booking.user,
+      room: review.booking.room,
+    }))
 
     return NextResponse.json(reviews)
   } catch (error) {

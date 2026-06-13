@@ -32,12 +32,24 @@ export async function GET(request: NextRequest) {
         email: true, phone: true, role: true,
         createdAt: true, deletedAt: true,
         staff:    { select: { id: true, position: true, role: true, isActive: true } },
-        _count:   { select: { bookings: true, reviews: true } },
+        _count:   { select: { bookings: true } },
       },
       orderBy: { createdAt: "desc" },
     })
 
-    return NextResponse.json(users)
+    const reviewCounts = await prisma.$queryRaw<Array<{ userId: string; count: bigint }>>`
+      SELECT b.userId, COUNT(r.id) AS count
+      FROM reviews r
+      INNER JOIN bookings b ON b.id = r.bookingId
+      WHERE r.deletedAt IS NULL
+      GROUP BY b.userId
+    `
+    const reviewsByUser = new Map(reviewCounts.map((row) => [row.userId, Number(row.count)]))
+
+    return NextResponse.json(users.map((user) => ({
+      ...user,
+      _count: { ...user._count, reviews: reviewsByUser.get(user.id) ?? 0 },
+    })))
   } catch (error) {
     console.error("[SUPERADMIN_USERS_GET]", error)
     return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 })

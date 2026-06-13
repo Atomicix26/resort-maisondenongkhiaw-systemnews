@@ -8,7 +8,7 @@ import { useSession } from "next-auth/react"
 import {
   Search, Calendar, Bed, Users, ChevronRight,
   CheckCircle2, Clock, XCircle, AlertCircle,
-  CreditCard, Banknote, ArrowLeft, Loader2, X,
+  CreditCard, Banknote, ArrowLeft, Loader2, X, Star,
 } from "lucide-react"
 
 // ── Types ────────────────────────────────────────────────────────
@@ -22,6 +22,13 @@ interface Transaction {
   slipImage:   string | null
 }
 
+interface ReviewSummary {
+  id:        string
+  rating:    number
+  comment:   string | null
+  createdAt: string
+}
+
 interface Booking {
   id:             string
   checkIn:        string
@@ -33,6 +40,7 @@ interface Booking {
   createdAt:      string
   paymentStatus:  string
   paymentMethod:  string | null
+  review:         ReviewSummary | null
   room: {
     id:      string
     name:    string
@@ -149,7 +157,117 @@ function CancelModal({ booking, onClose, onDone }: {
 }
 
 // ── Booking Card ─────────────────────────────────────────────────
-function BookingCard({ booking, onCancel }: { booking: Booking; onCancel: () => void }) {
+function ReviewModal({ booking, onClose, onDone }: {
+  booking: Booking
+  onClose: () => void
+  onDone:  () => void
+}) {
+  const [rating,  setRating]  = useState(booking.review?.rating ?? 5)
+  const [comment, setComment] = useState(booking.review?.comment ?? "")
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState("")
+
+  async function handleSubmit() {
+    if (rating < 1 || rating > 5) {
+      setError("Rating must be between 1 and 5")
+      return
+    }
+
+    setLoading(true)
+    setError("")
+    try {
+      const res = await fetch("/api/reviews", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          rating,
+          comment: comment.trim() || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? "Failed to submit review")
+        return
+      }
+      onDone()
+    } catch {
+      setError("Failed to submit review")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 font-lao">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative">
+        <button onClick={onClose} className="absolute top-5 right-5 text-gray-400 hover:text-gray-700">
+          <X size={18} />
+        </button>
+
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center">
+            <Star size={18} className="text-amber-500 fill-amber-400" />
+          </div>
+          <div>
+            <h3 className="text-[15px] font-bold text-gray-900">Review your stay</h3>
+            <p className="text-[11px] text-gray-400">{booking.room.name} - {fmtDate(booking.checkIn)}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 mb-4">
+          {Array.from({ length: 5 }).map((_, index) => {
+            const value = index + 1
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setRating(value)}
+                className="p-1 text-amber-400 hover:scale-110 transition-transform"
+                aria-label={`Rate ${value} stars`}
+              >
+                <Star size={24} className={value <= rating ? "fill-amber-400" : "fill-transparent text-gray-300"} />
+              </button>
+            )
+          })}
+        </div>
+
+        <textarea
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          rows={4}
+          placeholder="Tell us about your stay..."
+          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-[13px] outline-none focus:border-amber-300 resize-none mb-4"
+        />
+
+        {error && <p className="text-red-500 text-[12px] mb-3">{error}</p>}
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-600 hover:bg-gray-50 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[13px] font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <Star size={14} />}
+            Submit
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BookingCard({ booking, onCancel, onReview }: {
+  booking: Booking
+  onCancel: () => void
+  onReview: () => void
+}) {
   const [expanded, setExpanded] = useState(false)
   const bCfg  = bookingStatusCfg[booking.status]  ?? bookingStatusCfg.PENDING
   const pCfg  = paymentStatusCfg[booking.paymentStatus] ?? paymentStatusCfg.PENDING
@@ -159,6 +277,7 @@ function BookingCard({ booking, onCancel }: { booking: Booking; onCancel: () => 
     ? booking.room.images[0] : "/room.png"
   const MethodIcon = booking.paymentMethod ? (methodIcon[booking.paymentMethod] ?? Banknote) : Banknote
   const canCancel  = ["PENDING", "CONFIRMED"].includes(booking.status)
+  const canReview  = booking.status === "COMPLETED"
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-200">
@@ -211,6 +330,13 @@ function BookingCard({ booking, onCancel }: { booking: Booking; onCancel: () => 
                 <button onClick={onCancel}
                   className="text-[11px] border border-red-200 text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition-all">
                   ຍົກເລີກ
+                </button>
+              )}
+              {canReview && (
+                <button onClick={onReview}
+                  className="inline-flex items-center gap-1 text-[11px] border border-amber-200 text-amber-600 hover:bg-amber-50 px-3 py-1.5 rounded-lg font-medium transition-all">
+                  <Star size={11} className={booking.review ? "fill-amber-400" : ""} />
+                  {booking.review ? "Edit review" : "Review"}
                 </button>
               )}
               {/* Expand details */}
@@ -289,6 +415,7 @@ export default function HistoryPage() {
   const [search,    setSearch]    = useState("")
   const [filter,    setFilter]    = useState("ALL")
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null)
+  const [reviewTarget, setReviewTarget] = useState<Booking | null>(null)
 
   // redirect ถ้าไม่ได้ login
   useEffect(() => {
@@ -428,6 +555,7 @@ export default function HistoryPage() {
                 key={booking.id}
                 booking={booking}
                 onCancel={() => setCancelTarget(booking)}
+                onReview={() => setReviewTarget(booking)}
               />
             ))}
           </div>
@@ -442,6 +570,16 @@ export default function HistoryPage() {
           onDone={() => {
             setCancelTarget(null)
             fetchBookings()   // refresh
+          }}
+        />
+      )}
+      {reviewTarget && (
+        <ReviewModal
+          booking={reviewTarget}
+          onClose={() => setReviewTarget(null)}
+          onDone={() => {
+            setReviewTarget(null)
+            fetchBookings()
           }}
         />
       )}

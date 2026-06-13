@@ -106,7 +106,7 @@ export default function PaymentContent() {
       .then((data) => setRoom(data ?? null))
       .catch(() => setRoom(null))
       .finally(() => setLoadRoom(false))
-  }, [roomId])
+  }, [roomId, checkIn, checkOut])
 
   // ✅ revoke ObjectURL — ป้องกัน memory leak
   useEffect(() => {

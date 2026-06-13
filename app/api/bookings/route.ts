@@ -142,6 +142,9 @@ export async function GET() {
           orderBy: { createdAt: "desc" },
           take: 1,
         },
+        review: {
+          select: { id: true, rating: true, comment: true, createdAt: true },
+        },
       },
       orderBy: { createdAt: "desc" },
     })
@@ -153,6 +156,7 @@ export async function GET() {
       paymentStatus: b.transactions[0]?.status ?? "PENDING",
       paymentMethod: b.transactions[0]?.method ?? null,
       paymentAmount: b.transactions[0] ? Number(b.transactions[0].amount) : null,
+      review:        b.review,
     }))
 
     return NextResponse.json({ bookings: parsed })

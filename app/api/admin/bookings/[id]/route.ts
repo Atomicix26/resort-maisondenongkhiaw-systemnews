@@ -47,10 +47,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         where: { id },
         data: {
           ...(status         && { status: status as BookingStatus }),
-          ...(actualCheckIn  && { actualCheckIn: new Date(actualCheckIn), checkInStaffId: staff?.id }),
-          ...(actualCheckOut && { actualCheckOut: new Date(actualCheckOut), checkOutStaffId: staff?.id }),
-          ...(checkInRemarks  !== undefined && { checkInRemarks }),
-          ...(checkOutRemarks !== undefined && { checkOutRemarks }),
+          ...(actualCheckIn  && { actualCheckIn: new Date(actualCheckIn) }),
+          ...(actualCheckOut && { actualCheckOut: new Date(actualCheckOut) }),
         },
         include: {
           user:         { select: { name: true, lastName: true, email: true } },
@@ -85,9 +83,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         })
       }
 
-      // อัปเดต BookAppr ถ้ามี
+      // อัปเดต BookApproval ถ้ามี
       if (status === "CONFIRMED" || status === "CANCELLED") {
-        await tx.bookAppr.upsert({
+        await tx.bookApproval.upsert({
           where:  { bookingId: id },
           create: { bookingId: id, staffId: staff?.id, status: status === "CONFIRMED" ? "APPROVED" : "REJECTED", apprDate: new Date() },
           update: { staffId: staff?.id, status: status === "CONFIRMED" ? "APPROVED" : "REJECTED", apprDate: new Date() },

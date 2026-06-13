@@ -39,10 +39,19 @@ export async function GET(request: NextRequest) {
         view: true, images: true, amenities: true,
         status: true, featured: true, isActive: true,
         roomType: { select: { typeName: true, basePrice: true } },
-        _count:   { select: { bookings: true, reviews: true } },
+        _count:   { select: { bookings: true } },
       },
       orderBy: [{ featured: "desc" }, { createdAt: "asc" }],
     })
+
+    const reviewCounts = await prisma.$queryRaw<Array<{ roomId: string; count: bigint }>>`
+      SELECT b.roomId, COUNT(r.id) AS count
+      FROM reviews r
+      INNER JOIN bookings b ON b.id = r.bookingId
+      WHERE r.deletedAt IS NULL
+      GROUP BY b.roomId
+    `
+    const reviewsByRoom = new Map(reviewCounts.map((row) => [row.roomId, Number(row.count)]))
 
     // parse JSON fields
     const parsed = rooms.map((r) => ({
@@ -50,6 +59,7 @@ export async function GET(request: NextRequest) {
       price:     Number(r.price),
       images:    tryParse(r.images as string | null,    []),
       amenities: tryParse(r.amenities as string | null, []),
+      _count:    { ...r._count, reviews: reviewsByRoom.get(r.id) ?? 0 },
     }))
 
     return NextResponse.json(parsed)
