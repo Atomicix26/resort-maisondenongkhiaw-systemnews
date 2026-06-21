@@ -20,7 +20,6 @@ model User {
   phone     String?
   role      Role      @default(USER)
   createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
   deletedAt DateTime? // soft delete
 
   // relations
@@ -39,16 +38,14 @@ model User {
 //  แก้: ไม่มี email/password ซ้ำ — ใช้ User.email / User.password
 // ════════════════════════════════════════════════════════════════
 model Staff {
-  id        String    @id @default(cuid())
-  userId    String    @unique // ← FK → User (1:1)
-  position  String? // ตำแหน่งงาน
-  role      StaffRole @default(STAFF) // STAFF | MANAGER | ADMIN
-  salary    Decimal?  @db.Decimal(10, 2)
-  startDate DateTime  @default(now())
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
+  id                   String               @id @default(cuid())
+  userId               String               @unique // ← FK → User (1:1)
+  position             String? // ตำแหน่งงาน
+  role                 StaffRole            @default(STAFF) // STAFF | MANAGER | ADMIN
+  salary               Decimal?             @db.Decimal(10, 2)
+  startDate            DateTime             @default(now())
+  isActive             Boolean              @default(true)
+  createdAt            DateTime             @default(now())
   user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   checkIns             CheckInLog[]
   checkOuts            CheckOutLog[]
@@ -65,17 +62,15 @@ model Staff {
 //  ROOM TYPE
 // ════════════════════════════════════════════════════════════════
 model RoomType {
-  id          String   @id @default(cuid())
-  typeName    String
-  description String?  @db.Text
-  basePrice   Decimal  @db.Decimal(10, 2) // ราคาเริ่มต้น
-  maxGuests   Int
-  images      String?  @db.Text // JSON array
-  amenities   String?  @db.Text // JSON array
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
+  id           String        @id @default(cuid())
+  typeName     String
+  description  String?       @db.Text
+  basePrice    Decimal       @db.Decimal(10, 2) // ราคาเริ่มต้น
+  maxGuests    Int
+  images       String?       @db.Text // JSON array
+  amenities    String?       @db.Text // JSON array
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
   rooms        Room[]
   priceConfigs PriceConfig[]
 
@@ -102,7 +97,6 @@ model Room {
   featured    Boolean    @default(false)
   isActive    Boolean    @default(true)
   createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
   deletedAt   DateTime? // soft delete
 
   roomType   RoomType?    @relation(fields: [roomTypeId], references: [id])
@@ -128,10 +122,8 @@ model PriceConfig {
   priority    Int      @default(1) // สูงกว่า = ชนะ
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
   // กฎ: PriceConfig(priority) > Room.price > RoomType.basePrice
-  roomType RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  roomType    RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
 
   @@index([roomTypeId])
   @@index([startDate, endDate])
@@ -160,7 +152,6 @@ model Booking {
   actualCheckOut DateTime? // เวลา check-out จริงล่าสุด
 
   createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
   deletedAt DateTime? // soft delete
 
   user          User                 @relation(fields: [userId], references: [id])
@@ -193,14 +184,10 @@ model PaymentTransaction {
   status       PaymentStatus   @default(PENDING)
   slipImage    String?
   paymentDate  DateTime?
-  verifiedAt   DateTime?
   verifiedById String? // Staff.id ที่ verify
-  note         String?
   createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-
-  booking    Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  verifiedBy Staff?  @relation(fields: [verifiedById], references: [id])
+  booking      Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  verifiedBy   Staff?          @relation(fields: [verifiedById], references: [id])
 
   @@index([bookingId])
   @@index([verifiedById])
@@ -298,7 +285,6 @@ model Review {
   rating    Int // 1–5
   comment   String?   @db.Text
   createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
   deletedAt DateTime? // soft delete
 
   booking    Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)

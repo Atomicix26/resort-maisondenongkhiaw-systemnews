@@ -15,6 +15,7 @@ interface RoomType {
   description: string | null
   basePrice: number
   maxGuests: number
+  images: string[]
   amenities: string[]
   isActive: boolean
   _count: { rooms: number; priceConfigs: number }
@@ -25,6 +26,7 @@ interface FormState {
   description: string
   basePrice: string
   maxGuests: string
+  images: string
   amenities: string
   isActive: boolean
 }
@@ -34,6 +36,7 @@ const EMPTY_FORM: FormState = {
   description: "",
   basePrice: "",
   maxGuests: "2",
+  images: "",
   amenities: "",
   isActive: true,
 }
@@ -94,6 +97,7 @@ function RoomTypeModal({
           description: initial.description ?? "",
           basePrice: String(initial.basePrice),
           maxGuests: String(initial.maxGuests),
+          images: initial.images.join(", "),
           amenities: initial.amenities.join(", "),
           isActive: initial.isActive,
         }
@@ -124,6 +128,7 @@ function RoomTypeModal({
           ...form,
           basePrice: Number(form.basePrice),
           maxGuests: Number(form.maxGuests),
+          images: form.images,
           amenities: form.amenities,
         }),
       })
@@ -162,6 +167,13 @@ function RoomTypeModal({
               <input type="number" value={form.maxGuests} onChange={(event) => set("maxGuests", event.target.value)}
                 className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-purple-400" />
             </div>
+          </div>
+          <div>
+            <label className="text-[11px] text-gray-600 font-semibold">Images (URL)</label>
+            <input value={form.images} onChange={(event) => set("images", event.target.value)}
+              placeholder="https://... , https://..."
+              className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-purple-400" />
+            <p className="mt-1 text-[10px] text-gray-400">ໃສ່ URL ຮູບພາບ, ຄັ່ນດ້ວຍ comma (,)</p>
           </div>
           <div>
             <label className="text-[11px] text-gray-600 font-semibold">Amenities</label>

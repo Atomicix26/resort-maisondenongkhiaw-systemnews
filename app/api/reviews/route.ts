@@ -47,7 +47,6 @@ export async function POST(request: NextRequest) {
         data: {
           rating: parsedRating,
           comment,
-          updatedAt: new Date(),
         },
       })
       return NextResponse.json({ review })

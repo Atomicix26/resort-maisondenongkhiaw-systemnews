@@ -15,7 +15,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     if (session.user.role === "USER") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const { status, note } = await request.json()
+    const { status } = await request.json()
     if (!["PAID", "FAILED"].includes(status)) {
       return NextResponse.json({ error: "status ຕ້ອງເປັນ PAID ຫຼື FAILED" }, { status: 400 })
     }
@@ -26,9 +26,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       where: { id },
       data: {
         status:      status as PaymentStatus,
-        verifiedAt:  new Date(),
         verifiedById: staff?.id ?? null,
-        ...(note !== undefined && { note }),
       },
       include: { booking: { select: { id: true, status: true } } },
     })
