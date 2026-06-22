@@ -60,16 +60,56 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async jwt({ token, user }) {
+      // ── ตอน login ครั้งแรก: ใส่ข้อมูลจาก authorize() ────────────────
       if (user) {
-        token.id    = user.id
-        token.name  = user.name
-        token.email = user.email
-        token.role  = user.role
+        token.id      = user.id
+        token.name    = user.name
+        token.email   = user.email
+        token.role    = user.role
+        token.invalid = false
+        return token
       }
+
+      // ── อ่าน session ครั้งถัดไป: ตรวจสอบกับ DB ใหม่ทุกครั้ง ──────────
+      // กัน session ค้างหลังบัญชีถูกลบ / ปิดใช้งาน / ลด-เพิ่มสิทธิ์ (BUG-001)
+      if (!token.id) {
+        token.invalid = true
+        token.role    = ""
+        return token
+      }
+
+      const dbUser = await prisma.user.findUnique({
+        where:  { id: token.id as string },
+        select: {
+          id: true, name: true, email: true, role: true, deletedAt: true,
+          staff: { select: { isActive: true } },
+        },
+      })
+
+      const revoked =
+        !dbUser ||
+        dbUser.deletedAt !== null ||
+        (dbUser.role === "ADMIN" && dbUser.staff !== null && !dbUser.staff.isActive)
+
+      if (revoked) {
+        token.invalid = true
+        token.role    = "" // ล้างสิทธิ์ → middleware redirect ออก
+        return token
+      }
+
+      // sync ค่าล่าสุดจาก DB (สะท้อนการ promote/demote + เปลี่ยนชื่อ/อีเมล)
+      token.role    = dbUser!.role
+      token.name    = dbUser!.name
+      token.email   = dbUser!.email
+      token.invalid = false
       return token
     },
 
     async session({ session, token }) {
+      // บัญชีถูกเพิกถอน → ส่ง session ที่ไม่มี user เพื่อให้ทุก guard ปฏิเสธ
+      if (token.invalid) {
+        return { ...session, user: undefined as unknown as typeof session.user }
+      }
       if (session.user) {
         session.user.id    = token.id    as string
         session.user.name  = token.name  as string
@@ -85,7 +125,11 @@ export const authOptions: NextAuthOptions = {
     error:  "/login",
   },
 
-  session: { strategy: "jwt" },
+  session: {
+    strategy:  "jwt",
+    maxAge:    8 * 60 * 60, // อายุ session สูงสุด 8 ชม. (BUG-005)
+    updateAge: 60 * 60,     // rotate token ทุก 1 ชม. ที่มีการใช้งาน
+  },
   secret:  process.env.NEXTAUTH_SECRET,
 }
 

@@ -19,6 +19,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if (id === session.user.id)
       return NextResponse.json({ error: "ບໍ່ສາມາດແກ້ໄຂຕົວເອງໄດ້" }, { status: 400 })
 
+    // ห้าม SUPERADMIN แก้ไข SUPERADMIN คนอื่น (BUG-015)
+    const target = await prisma.user.findUnique({ where: { id }, select: { role: true } })
+    if (!target)
+      return NextResponse.json({ error: "ບໍ່ພົບຜູ້ໃຊ້" }, { status: 404 })
+    if (target.role === "SUPERADMIN")
+      return NextResponse.json({ error: "ບໍ່ສາມາດແກ້ໄຂ SUPERADMIN ຄົນອື່ນໄດ້" }, { status: 403 })
+
     const { role, deletedAt } = await request.json()
 
     const result = await prisma.$transaction(async (tx) => {
@@ -68,6 +75,13 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
     if (id === session.user.id)
       return NextResponse.json({ error: "ບໍ່ສາມາດລຶບຕົວເອງໄດ້" }, { status: 400 })
+
+    // ห้าม SUPERADMIN ลบ SUPERADMIN คนอื่น (BUG-015)
+    const target = await prisma.user.findUnique({ where: { id }, select: { role: true } })
+    if (!target)
+      return NextResponse.json({ error: "ບໍ່ພົບຜູ້ໃຊ້" }, { status: 404 })
+    if (target.role === "SUPERADMIN")
+      return NextResponse.json({ error: "ບໍ່ສາມາດລຶບ SUPERADMIN ຄົນອື່ນໄດ້" }, { status: 403 })
 
     await prisma.user.update({
       where: { id },

@@ -73,6 +73,15 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// แสดงเฉพาะนามสกุลย่อ เพื่อไม่เปิดเผยชื่อ-นามสกุลเต็มของผู้เข้าพัก (PII)
+function maskReviewer(name?: string | null, lastName?: string | null): string {
+  const first   = name?.trim() ?? ""
+  const initial = lastName?.trim()?.[0]
+  if (!first && !initial) return "Anonymous"
+  return initial ? `${first} ${initial}.`.trim() : first || "Anonymous"
+}
+
+// GET — รีวิวสาธารณะของห้อง: เฉพาะที่ผ่านการอนุมัติ + ปกปิด PII
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -86,27 +95,33 @@ export async function GET(request: NextRequest) {
       where: {
         deletedAt: null,
         booking: { roomId, deletedAt: null },
+        // เฉพาะรีวิวที่ Admin อนุมัติแล้ว — ไม่รั่ว PENDING / HIDDEN / FLAGGED
+        management: { is: { status: "APPROVED" } },
       },
-      include: {
+      select: {
+        id:        true,
+        rating:    true,
+        comment:   true,
+        createdAt: true,
         booking: {
           select: {
-            id: true,
-            checkIn: true,
-            checkOut: true,
-            status: true,
             user: { select: { name: true, lastName: true } },
             room: { select: { id: true, name: true } },
           },
         },
-        management: { select: { status: true, reply: true } },
+        management: { select: { reply: true } },
       },
       orderBy: { createdAt: "desc" },
     })
 
     const reviews = rows.map((review) => ({
-      ...review,
-      user: review.booking.user,
-      room: review.booking.room,
+      id:        review.id,
+      rating:    review.rating,
+      comment:   review.comment,
+      createdAt: review.createdAt,
+      user:      { name: maskReviewer(review.booking.user.name, review.booking.user.lastName) },
+      room:      review.booking.room,
+      reply:     review.management?.reply ?? null,
     }))
 
     return NextResponse.json({ reviews })

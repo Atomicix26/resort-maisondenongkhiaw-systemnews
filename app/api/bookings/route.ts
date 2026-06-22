@@ -1,8 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { Prisma } from "@prisma/client"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { getEffectiveNightlyPrice } from "@/lib/pricing"
+import { getStayPricing } from "@/lib/pricing"
+
+// ── ตรวจว่า error เกิดจาก serialization/deadlock (ควร retry) ──────────
+// P2034 = Prisma: transaction failed due to write conflict or deadlock
+function isSerializationError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === "P2034"
+  }
+  const msg = error instanceof Error ? error.message : ""
+  return /deadlock|lock wait timeout|\b1213\b|\b1205\b|40001/i.test(msg)
+}
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -34,6 +45,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "ວັນ Check-out ຕ້ອງຫຼັງ Check-in" }, { status: 400 })
   }
 
+  // ── กันจองวันที่ผ่านมาแล้ว (BUG-008) ────────────────────────────────
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  if (checkInDate < todayStart) {
+    return NextResponse.json({ message: "ວັນ Check-in ຕ້ອງບໍ່ເປັນວັນທີຜ່ານມາ" }, { status: 400 })
+  }
+
   const guestCount = Number(guests)
   if (isNaN(guestCount) || guestCount < 1) {
     return NextResponse.json({ message: "ຈຳນວນຜູ້ເຂົ້າພັກບໍ່ຖືກຕ້ອງ" }, { status: 400 })
@@ -56,56 +74,83 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const nights     = Math.ceil(
-      (checkOutDate.getTime() - checkInDate.getTime()) / 86400000
-    )
-    const pricing = await getEffectiveNightlyPrice(room, checkInDate, checkOutDate)
-    const totalPrice = pricing.nightlyPrice * nights
+    // คิดราคาต่อคืน รองรับการพักข้าม season (BUG-014)
+    const pricing    = await getStayPricing(room, checkInDate, checkOutDate)
+    const totalPrice = pricing.total
 
-    const result = await prisma.$transaction(async (tx) => {
+    // ── กัน double-booking (BUG-004) ────────────────────────────────
+    // ใช้ Serializable เพื่อให้ conflict-check ล็อกช่วง index (next-key lock)
+    // → transaction คู่แข่งที่จองวันทับกัน insert ไม่ได้ จนกว่าจะ commit
+    // หาก InnoDB เกิด deadlock/serialization → retry แล้วเช็คใหม่
+    const MAX_ATTEMPTS = 3
+    let result: { booking: unknown; transaction: unknown } | null = null
 
-      const conflict = await tx.booking.findFirst({
-        where: {
-          roomId,
-          status:    { notIn: ["CANCELLED"] },
-          checkIn:   { lt: checkOutDate },
-          checkOut:  { gt: checkInDate  },
-          deletedAt: null,
-        },
-      })
-      if (conflict) {
-        throw new Error("ROOM_UNAVAILABLE")
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        result = await prisma.$transaction(async (tx) => {
+
+          const conflict = await tx.booking.findFirst({
+            where: {
+              roomId,
+              status:    { notIn: ["CANCELLED"] },
+              checkIn:   { lt: checkOutDate },
+              checkOut:  { gt: checkInDate  },
+              deletedAt: null,
+            },
+          })
+          if (conflict) {
+            throw new Error("ROOM_UNAVAILABLE")
+          }
+
+          // 2. สร้าง Booking ด้วยราคาที่คำนวณจาก server
+          const booking = await tx.booking.create({
+            data: {
+              userId:         session.user.id,
+              roomId,
+              checkIn:        checkInDate,
+              checkOut:       checkOutDate,
+              guests:         guestCount,
+              totalPrice,
+              status:         "PENDING",
+              specialRequest: specialRequest ?? null,
+            },
+            include: {
+              room: { select: { name: true, price: true, view: true } },
+            },
+          })
+
+          const transaction = await tx.paymentTransaction.create({
+            data: {
+              bookingId: booking.id,
+              type:      "CHARGE",
+              amount:    totalPrice,            // ✅ server-calculated
+              method:    "TRANSFER",
+              status:    "PENDING",
+            },
+          })
+
+          return { booking, transaction }
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+
+        break // สำเร็จ
+
+      } catch (txError) {
+        // deadlock/serialization ชั่วคราว → ถอยเล็กน้อยแล้วลองใหม่
+        if (isSerializationError(txError) && attempt < MAX_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, 25 * attempt))
+          continue
+        }
+        // retry หมดเพราะ contention → ถือว่าห้องถูกแย่งจอง (409)
+        if (isSerializationError(txError)) {
+          throw new Error("ROOM_UNAVAILABLE")
+        }
+        throw txError
       }
+    }
 
-      // 2. สร้าง Booking ด้วยราคาที่คำนวณจาก server
-      const booking = await tx.booking.create({
-        data: {
-          userId:         session.user.id,
-          roomId,
-          checkIn:        checkInDate,
-          checkOut:       checkOutDate,
-          guests:         guestCount,
-          totalPrice,                      
-          status:         "PENDING",
-          specialRequest: specialRequest ?? null,
-        },
-        include: {
-          room: { select: { name: true, price: true, view: true } },
-        },
-      })
-
-      const transaction = await tx.paymentTransaction.create({
-        data: {
-          bookingId: booking.id,
-          type:      "CHARGE",
-          amount:    totalPrice,            // ✅ server-calculated
-          method:    "TRANSFER",
-          status:    "PENDING",
-        },
-      })
-
-      return { booking, transaction }
-    })
+    if (!result) {
+      throw new Error("ROOM_UNAVAILABLE")
+    }
 
     return NextResponse.json(
       { booking: result.booking, transaction: result.transaction },

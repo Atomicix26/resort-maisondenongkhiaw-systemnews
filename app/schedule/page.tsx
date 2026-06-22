@@ -98,10 +98,12 @@ function Sidebar({ active, role }: { active: string; role?: string }) {
 
 // ── Detail Modal ─────────────────────────────────────────────────
 function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onClose: () => void; onUpdated: () => void }) {
-  const [saving,    setSaving]    = useState<string|null>(null)
-  const [verifying, setVerifying] = useState(false)
-  const [remarks,   setRemarks]   = useState("")
-  const [error,     setError]     = useState("")
+  const [saving,       setSaving]       = useState<string|null>(null)
+  const [verifying,    setVerifying]    = useState(false)
+  const [remarks,      setRemarks]      = useState("")
+  const [showReject,   setShowReject]   = useState(false)
+  const [rejectReason, setRejectReason] = useState("")
+  const [error,        setError]        = useState("")
 
   async function changeStatus(status: BookingStatus) {
     setSaving(status); setError("")
@@ -121,11 +123,11 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
     onUpdated(); onClose()
   }
 
-  async function verifyPayment(txId: string, status: "PAID"|"FAILED") {
+  async function verifyPayment(txId: string, status: "PAID"|"FAILED", reason?: string) {
     setVerifying(true); setError("")
     const res  = await fetch(`/api/admin/payments/${txId}/verify`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(status === "FAILED" ? { status, reason } : { status }),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error ?? "ບໍ່ສຳເລັດ"); setVerifying(false); return }
@@ -205,16 +207,36 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
                 <Eye size={11} /> ເບິ່ງ slip
               </a>
             )}
-            {tx.status === "PENDING_VERIFY" && (
+            {tx.status === "PENDING_VERIFY" && !showReject && (
               <div className="flex gap-2 mt-3">
                 <button disabled={verifying} onClick={() => verifyPayment(tx.id, "PAID")}
                   className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-[11px] font-bold disabled:opacity-50">
                   ✅ ຢືນຢັນຊຳລະ
                 </button>
-                <button disabled={verifying} onClick={() => verifyPayment(tx.id, "FAILED")}
+                <button disabled={verifying} onClick={() => { setError(""); setShowReject(true) }}
                   className="flex-1 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[11px] font-bold disabled:opacity-50">
                   ❌ ປະຕິເສດ
                 </button>
+              </div>
+            )}
+            {tx.status === "PENDING_VERIFY" && showReject && (
+              <div className="mt-3 space-y-2">
+                <label className="text-[11px] text-gray-500 font-semibold">ເຫດຜົນໃນການປະຕິເສດ <span className="text-red-500">*</span></label>
+                <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="ລະບຸເຫດຜົນ ເຊັ່ນ: slip ບໍ່ຖືກຕ້ອງ / ຍອດບໍ່ກົງ..."
+                  rows={2}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px] text-gray-800 bg-white outline-none focus:border-red-300" />
+                <div className="flex gap-2">
+                  <button disabled={verifying || !rejectReason.trim()}
+                    onClick={() => verifyPayment(tx.id, "FAILED", rejectReason.trim())}
+                    className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-bold disabled:opacity-50">
+                    {verifying ? "..." : "ຢືນຢັນປະຕິເສດ"}
+                  </button>
+                  <button disabled={verifying} onClick={() => { setShowReject(false); setRejectReason("") }}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-[11px] font-bold disabled:opacity-50">
+                    ຍົກເລີກ
+                  </button>
+                </div>
               </div>
             )}
           </div>

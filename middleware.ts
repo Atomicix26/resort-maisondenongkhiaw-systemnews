@@ -4,61 +4,77 @@ import { NextResponse } from "next/server"
 export default withAuth(
   function middleware(req) {
     const { pathname } = req.nextUrl
-    const role = req.nextauth.token?.role as string | undefined
+    const role  = req.nextauth.token?.role as string | undefined
+    const isApi = pathname.startsWith("/api/")
 
-    // ── SUPERADMIN เท่านั้น ─────────────────────────────────────────
-    // รวม /booking (room management) เข้ามาด้วย — Admin ไม่มีสิทธิ์แล้ว
-    const superRoutes = [
+    // ปฏิเสธ: API → JSON, page → redirect (BUG-013)
+    const deny = (status: 401 | 403, page: string) =>
+      isApi
+        ? NextResponse.json(
+            { error: status === 401 ? "Unauthorized" : "Forbidden" },
+            { status }
+          )
+        : NextResponse.redirect(new URL(page, req.url))
+
+    // ── SUPERADMIN เท่านั้น (page + api) ─────────────────────────────
+    const superPrefixes = [
       "/superadmin",
-      "/booking",           // ← ย้ายจาก adminRoutes มา SuperAdmin
+      "/booking",        // room management
       "/staff",
+      "/api/superadmin",
+      "/api/staff",
     ]
-    if (superRoutes.some((r) => pathname.startsWith(r))) {
-      if (role !== "SUPERADMIN") {
-        return NextResponse.redirect(new URL("/unauthorized", req.url))
-      }
+    if (superPrefixes.some((r) => pathname.startsWith(r))) {
+      if (!role) return deny(401, "/login")
+      if (role !== "SUPERADMIN") return deny(403, "/unauthorized")
     }
 
-    // ── ADMIN & SUPERADMIN ───────────────────────────────────────────
-    // ลบ /booking ออก — Admin จัดการแค่ staff, schedule, review
-    const adminRoutes = [
+    // ── ADMIN & SUPERADMIN (page + api) ──────────────────────────────
+    const adminPrefixes = [
       "/admin",
       "/schedule",
       "/review",
+      "/api/admin",
+      "/api/slips",      // serve payment slips
     ]
-    if (adminRoutes.some((r) => pathname.startsWith(r))) {
-      if (role !== "ADMIN" && role !== "SUPERADMIN") {
-        return NextResponse.redirect(new URL("/unauthorized", req.url))
-      }
+    if (adminPrefixes.some((r) => pathname.startsWith(r))) {
+      if (!role) return deny(401, "/login")
+      if (role !== "ADMIN" && role !== "SUPERADMIN") return deny(403, "/unauthorized")
     }
 
     // ── USER (ต้อง login) ────────────────────────────────────────────
-    const userRoutes = ["/profile", "/payment", "/history"]
-    if (userRoutes.some((r) => pathname.startsWith(r))) {
-      if (!role) {
-        return NextResponse.redirect(new URL("/login", req.url))
-      }
+    const userPrefixes = ["/profile", "/payment", "/history"]
+    if (userPrefixes.some((r) => pathname.startsWith(r))) {
+      if (!role) return deny(401, "/login")
     }
 
     return NextResponse.next()
   },
   {
     callbacks: {
-      authorized: ({ token }) => !!token,
+      // ให้เข้า middleware function เสมอ แล้วตัดสิน 401/403 เอง
+      // (เพื่อให้ API ตอบ JSON แทนการ redirect ไปหน้า login)
+      authorized: () => true,
     },
   }
 )
 
 export const config = {
   matcher: [
+    // ── Pages ──
     "/profile/:path*",
     "/payment/:path*",
     "/history/:path*",
     "/admin/:path*",
-    "/booking/:path*",     // SuperAdmin only
-    "/staff/:path*",       // SuperAdmin only
+    "/booking/:path*",      // SuperAdmin only
+    "/staff/:path*",        // SuperAdmin only
     "/schedule/:path*",
     "/review/:path*",
     "/superadmin/:path*",
+    // ── Privileged API (defense-in-depth — เสริม self-guard ในแต่ละ route) ──
+    "/api/admin/:path*",        // ADMIN / SUPERADMIN
+    "/api/slips/:path*",        // ADMIN / SUPERADMIN
+    "/api/superadmin/:path*",   // SUPERADMIN
+    "/api/staff/:path*",        // SUPERADMIN
   ],
 }

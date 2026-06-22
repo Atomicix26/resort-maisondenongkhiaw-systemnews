@@ -23,10 +23,11 @@ model User {
   deletedAt DateTime? // soft delete
 
   // relations
-  staff          Staff? // ถ้า role=ADMIN → มี Staff profile
-  bookings       Booking[]
-  cancelRequests CancelRequest[]
-  accessLogs     AccessLog[]
+  staff            Staff? // ถ้า role=ADMIN → มี Staff profile
+  bookings         Booking[]
+  cancelRequests   CancelRequest[]
+  accessLogs       AccessLog[]
+  verifiedPayments PaymentTransaction[] @relation("PaymentVerifier") // payment ที่ user นี้ verify (BUG-002)
 
   @@index([email])
   @@index([role])
@@ -176,21 +177,26 @@ model Booking {
 //  Type: CHARGE | REFUND | ADJUSTMENT
 // ════════════════════════════════════════════════════════════════
 model PaymentTransaction {
-  id           String          @id @default(cuid())
-  bookingId    String
-  type         TransactionType @default(CHARGE)
-  amount       Decimal         @db.Decimal(10, 2)
-  method       PaymentMethod   @default(TRANSFER)
-  status       PaymentStatus   @default(PENDING)
-  slipImage    String?
-  paymentDate  DateTime?
-  verifiedById String? // Staff.id ที่ verify
-  createdAt    DateTime        @default(now())
-  booking      Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  verifiedBy   Staff?          @relation(fields: [verifiedById], references: [id])
+  id               String          @id @default(cuid())
+  bookingId        String
+  type             TransactionType @default(CHARGE)
+  amount           Decimal         @db.Decimal(10, 2)
+  method           PaymentMethod   @default(TRANSFER)
+  status           PaymentStatus   @default(PENDING)
+  slipImage        String?
+  paymentDate      DateTime?
+  verifiedById     String? // Staff.id ที่ verify (ถ้ามี Staff profile)
+  verifiedByUserId String? // User.id ผู้ verify จริง — accountability แม้ไม่มี Staff (BUG-002)
+  verifiedAt       DateTime? // เวลาที่ verify/reject (BUG-002)
+  reason           String?         @db.Text // เหตุผลตอนปฏิเสธ FAILED (BUG-002)
+  createdAt        DateTime        @default(now())
+  booking          Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  verifiedBy       Staff?          @relation(fields: [verifiedById], references: [id])
+  verifiedByUser   User?           @relation("PaymentVerifier", fields: [verifiedByUserId], references: [id])
 
   @@index([bookingId])
   @@index([verifiedById])
+  @@index([verifiedByUserId])
   @@index([status])
   @@map("payment_transactions")
 }

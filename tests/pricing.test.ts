@@ -1,12 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const findFirst = vi.fn()
+const findMany  = vi.fn()
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: { priceConfig: { findFirst: (...args: unknown[]) => findFirst(...args) } },
+  prisma: {
+    priceConfig: {
+      findFirst: (...args: unknown[]) => findFirst(...args),
+      findMany:  (...args: unknown[]) => findMany(...args),
+    },
+  },
 }))
 
-import { getEffectiveNightlyPrice } from "@/lib/pricing"
+import { getEffectiveNightlyPrice, getStayPricing } from "@/lib/pricing"
 
 describe("getEffectiveNightlyPrice", () => {
   beforeEach(() => {
@@ -58,5 +64,68 @@ describe("getEffectiveNightlyPrice", () => {
       new Date("2026-07-03"),
     )
     expect(res.nightlyPrice).toBe(1234.5)
+  })
+})
+
+describe("getStayPricing", () => {
+  beforeEach(() => {
+    findMany.mockReset()
+  })
+
+  it("uses room price for every night when room has no roomTypeId", async () => {
+    const res = await getStayPricing(
+      { price: 1500, roomTypeId: null },
+      new Date("2026-07-01"),
+      new Date("2026-07-04"), // 3 คืน
+    )
+    expect(res.nights).toBe(3)
+    expect(res.total).toBe(4500)
+    expect(findMany).not.toHaveBeenCalled()
+  })
+
+  it("uses room price for every night when no config matches", async () => {
+    findMany.mockResolvedValue([])
+    const res = await getStayPricing(
+      { price: 2000, roomTypeId: "rt-1" },
+      new Date("2026-07-01"),
+      new Date("2026-07-03"), // 2 คืน
+    )
+    expect(res.total).toBe(4000)
+  })
+
+  it("charges each night by the season covering that night (cross-season stay)", async () => {
+    // High season ครอบ 31 ธ.ค.–2 ม.ค., นอกนั้นใช้ราคาห้อง
+    findMany.mockResolvedValue([
+      {
+        seasonName: "NYE",
+        priceAmount: 5000,
+        startDate: new Date(Date.UTC(2026, 11, 31)),
+        endDate:   new Date(Date.UTC(2027, 0, 2)),
+      },
+    ])
+    // พัก 30 ธ.ค. – 2 ม.ค. = 3 คืน: 30(ห้อง 2000), 31(NYE 5000), 1(NYE 5000)
+    const res = await getStayPricing(
+      { price: 2000, roomTypeId: "rt-1" },
+      new Date(Date.UTC(2026, 11, 30)),
+      new Date(Date.UTC(2027, 0, 2)),
+    )
+    expect(res.nights).toBe(3)
+    expect(res.total).toBe(2000 + 5000 + 5000)
+    expect(res.breakdown.map((b) => b.price)).toEqual([2000, 5000, 5000])
+    expect(res.breakdown.map((b) => b.seasonName)).toEqual([null, "NYE", "NYE"])
+  })
+
+  it("picks the highest-priority config when seasons overlap on a night", async () => {
+    // configs ถูกส่งเรียง priority สูง→ต่ำมาแล้วจาก query (orderBy)
+    findMany.mockResolvedValue([
+      { seasonName: "Promo", priceAmount: 1000, startDate: new Date(Date.UTC(2026, 6, 1)), endDate: new Date(Date.UTC(2026, 6, 31)) },
+      { seasonName: "Base",  priceAmount: 3000, startDate: new Date(Date.UTC(2026, 6, 1)), endDate: new Date(Date.UTC(2026, 6, 31)) },
+    ])
+    const res = await getStayPricing(
+      { price: 2000, roomTypeId: "rt-1" },
+      new Date(Date.UTC(2026, 6, 10)),
+      new Date(Date.UTC(2026, 6, 12)), // 2 คืน
+    )
+    expect(res.total).toBe(2000) // 1000 × 2 (Promo ชนะ)
   })
 })
