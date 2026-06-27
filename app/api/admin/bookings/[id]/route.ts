@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { hasRole, ADMIN_ROLES } from "@/lib/rbac"
 import { BookingStatus, RoomStatus } from "@prisma/client"
 
 type Params = { params: Promise<{ id: string }> }
@@ -13,9 +14,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if (session.user.role === "USER") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (!hasRole(session.user.role, ADMIN_ROLES)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const { status, actualCheckIn, actualCheckOut, checkInRemarks, checkOutRemarks } = await request.json()
+
+    if (status !== undefined && !Object.values(BookingStatus).includes(status as BookingStatus)) {
+      return NextResponse.json({ error: "Invalid booking status" }, { status: 400 })
+    }
 
     const booking = await prisma.booking.findUnique({
       where: { id },

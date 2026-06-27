@@ -27,6 +27,10 @@ export async function PATCH(
     const { name, lastName, phone, position, role, salary, startDate } =
       await request.json();
 
+    if (role !== undefined && !Object.values(StaffRole).includes(role as StaffRole)) {
+      return NextResponse.json({ error: "Invalid staff role" }, { status: 400 });
+    }
+
     const staff = await prisma.staff.findUnique({
       where: { id },
     });

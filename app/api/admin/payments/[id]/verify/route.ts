@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { hasRole, ADMIN_ROLES } from "@/lib/rbac"
 import { PaymentStatus } from "@prisma/client"
 
 type Params = { params: Promise<{ id: string }> }
@@ -14,7 +15,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     // allowlist: เฉพาะ ADMIN / SUPERADMIN เท่านั้น (ไม่ใช้ denylist)
-    if (session.user.role !== "ADMIN" && session.user.role !== "SUPERADMIN") {
+    if (!hasRole(session.user.role, ADMIN_ROLES)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

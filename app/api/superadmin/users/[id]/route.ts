@@ -28,6 +28,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
     const { role, deletedAt } = await request.json()
 
+    if (role !== undefined && !Object.values(Role).includes(role as Role)) {
+      return NextResponse.json({ error: "Invalid role" }, { status: 400 })
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.update({
         where: { id },
