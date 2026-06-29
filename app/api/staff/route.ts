@@ -40,6 +40,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "ຊື່, email ແລະ ລະຫັດຜ່ານ ຈຳເປັນ" }, { status: 400 })
     }
 
+    if (role !== undefined && !Object.values(StaffRole).includes(role as StaffRole)) {
+      return NextResponse.json({ error: "Invalid staff role" }, { status: 400 })
+    }
+
     const exists = await prisma.user.findUnique({ where: { email } })
     if (exists) return NextResponse.json({ error: "Email ນີ້ມີໃນລະບົບແລ້ວ" }, { status: 409 })
 

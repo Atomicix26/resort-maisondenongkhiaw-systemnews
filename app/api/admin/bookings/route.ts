@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { hasRole, ADMIN_ROLES } from "@/lib/rbac"
 import { BookingStatus } from "@prisma/client"
 
 // GET /api/admin/bookings — ดึงทุก booking พร้อม user/room/payment
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if (session.user.role === "USER") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (!hasRole(session.user.role, ADMIN_ROLES)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status")

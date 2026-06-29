@@ -2,17 +2,44 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { checkRateLimit, getIP, RATE_LIMITS } from "@/lib/ratelimit"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import crypto from "crypto"
 
-const ALLOWED_MIME  = new Set(["image/jpeg", "image/png", "image/webp", "image/heic"])
 const MAX_FILE_SIZE = 5 * 1024 * 1024
-const EXT_MAP: Record<string, string> = {
+const EXT_MAP = {
   "image/jpeg": "jpg",
   "image/png":  "png",
   "image/webp": "webp",
   "image/heic": "heic",
+} as const
+
+// ── ตรวจชนิดไฟล์จริงจาก magic bytes — ไม่เชื่อ MIME ที่ client ส่งมา (BUG-006)
+function sniffImageType(buf: Buffer): keyof typeof EXT_MAP | null {
+  if (buf.length < 12) return null
+
+  // JPEG: FF D8 FF
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return "image/jpeg"
+  }
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
+    buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
+  ) {
+    return "image/png"
+  }
+  // WEBP: "RIFF" .... "WEBP"
+  if (buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") {
+    return "image/webp"
+  }
+  // HEIC: กล่อง "ftyp" ที่ offset 4 + brand ที่รองรับ
+  if (buf.toString("ascii", 4, 8) === "ftyp") {
+    const HEIC_BRANDS = new Set(["heic", "heix", "hevc", "heim", "heis", "hevm", "hevs", "mif1", "msf1"])
+    if (HEIC_BRANDS.has(buf.toString("ascii", 8, 12))) return "image/heic"
+  }
+  return null
 }
 
 // ✅ ลบ credit_card ออก + map status ให้ถูกต้อง
@@ -31,6 +58,20 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+  }
+
+  // ── Rate limit: 10 ครั้ง / 15 นาที ต่อ user และต่อ IP (BUG-007) ──────
+  // กันยิงอัปสลิป/สร้างธุรกรรมรัวๆ และกัน upload abuse
+  const ip = getIP(request)
+  for (const key of [`payment:user:${session.user.id}`, `payment:ip:${ip}`]) {
+    const rl = checkRateLimit(key, RATE_LIMITS.payment)
+    if (!rl.allowed) {
+      const retryAfter = Math.max(1, Math.ceil((rl.resetAt - Date.now()) / 1000))
+      return NextResponse.json(
+        { message: "ພະຍາຍາມຫຼາຍເກີນໄປ ກະລຸນາລໍຖ້າສັກຄູ່" },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      )
+    }
   }
 
   let formData: FormData
@@ -82,16 +123,25 @@ export async function POST(request: NextRequest) {
       if (!slipFile) {
         return NextResponse.json({ message: "ກະລຸນາອັບໂຫຼດສລິບ" }, { status: 400 })
       }
-      if (!ALLOWED_MIME.has(slipFile.type)) {
-        return NextResponse.json({ message: "ຮອງຮັບສະເພາະ JPG, PNG, WEBP" }, { status: 400 })
-      }
       if (slipFile.size > MAX_FILE_SIZE) {
         return NextResponse.json({ message: "ຂະໜາດໄຟລ໌ຕ້ອງບໍ່ເກີນ 5MB" }, { status: 400 })
       }
 
-      const bytes     = await slipFile.arrayBuffer()
-      const buffer    = Buffer.from(bytes)
-      const ext       = EXT_MAP[slipFile.type] ?? "jpg"
+      const bytes  = await slipFile.arrayBuffer()
+      const buffer = Buffer.from(bytes)
+
+      // ตรวจขนาดจริงซ้ำจาก buffer (size จาก client เชื่อ 100% ไม่ได้)
+      if (buffer.byteLength > MAX_FILE_SIZE) {
+        return NextResponse.json({ message: "ຂະໜາດໄຟລ໌ຕ້ອງບໍ່ເກີນ 5MB" }, { status: 400 })
+      }
+
+      // ✅ ตรวจชนิดไฟล์จริงจาก magic bytes แทนการเชื่อ slipFile.type (BUG-006)
+      const detectedMime = sniffImageType(buffer)
+      if (!detectedMime) {
+        return NextResponse.json({ message: "ຮອງຮັບສະເພາະຮູບ JPG, PNG, WEBP, HEIC" }, { status: 400 })
+      }
+
+      const ext       = EXT_MAP[detectedMime]
       const randomHex = crypto.randomBytes(16).toString("hex")
       slipFileName    = `slip_${randomHex}.${ext}`
 
