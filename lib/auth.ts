@@ -93,7 +93,7 @@ export const authOptions: NextAuthOptions = {
 
       if (revoked) {
         token.invalid = true
-        token.role    = "" // ล้างสิทธิ์ → middleware redirect ออก
+        token.role    = "" // ล้างสิทธิ์ → proxy redirect ออก
         return token
       }
 

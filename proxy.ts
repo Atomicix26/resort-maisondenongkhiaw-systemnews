@@ -2,7 +2,7 @@ import { withAuth } from "next-auth/middleware"
 import { NextResponse } from "next/server"
 
 export default withAuth(
-  function middleware(req) {
+  function proxy(req) {
     const { pathname } = req.nextUrl
     const role  = req.nextauth.token?.role as string | undefined
     const isApi = pathname.startsWith("/api/")
@@ -52,7 +52,7 @@ export default withAuth(
   },
   {
     callbacks: {
-      // ให้เข้า middleware function เสมอ แล้วตัดสิน 401/403 เอง
+      // ให้เข้า proxy function เสมอ แล้วตัดสิน 401/403 เอง
       // (เพื่อให้ API ตอบ JSON แทนการ redirect ไปหน้า login)
       authorized: () => true,
     },
