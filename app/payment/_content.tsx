@@ -84,6 +84,7 @@ export default function PaymentContent() {
   const [step,        setStep]        = useState<Step>("confirm")
   const [guests,      setGuests]      = useState(1)
   const [special,     setSpecial]     = useState("")
+  const [idCard,      setIdCard]      = useState("")
   const [bookingId,   setBookingId]   = useState("")
   const [method,      setMethod]      = useState<PayMethod>("transfer")
   const [currency,    setCurrency]    = useState<Currency>("LAK")
@@ -129,6 +130,7 @@ export default function PaymentContent() {
           roomId, checkIn, checkOut,
           guests:         guests.toString(),
           specialRequest: special,
+          guestIdCard:    idCard,
         }),
       })
       const data = await res.json()
@@ -350,6 +352,15 @@ export default function PaymentContent() {
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
                 </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1.5">
+                  ເລກບັດປະຊາຊົນ / ພາສປອດ — National ID / Passport
+                </p>
+                <input value={idCard} onChange={(e) => setIdCard(e.target.value)}
+                  placeholder="ເລກບັດປະຊາຊົນ ຫຼື ພາສປອດ ຜູ້ເຂົ້າພັກ"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-[13px] outline-none text-gray-800 focus:border-blue-300" />
               </div>
 
               <div>

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Invalid body" }, { status: 400 })
   }
 
-  const { roomId, checkIn, checkOut, guests, specialRequest } = body
+  const { roomId, checkIn, checkOut, guests, specialRequest, guestIdCard } = body
 
   if (!roomId || !checkIn || !checkOut || !guests) {
     return NextResponse.json({ message: "ຂໍ້ມູນບໍ່ຄົບ" }, { status: 400 })
@@ -113,6 +113,7 @@ export async function POST(request: NextRequest) {
               totalPrice,
               status:         "PENDING",
               specialRequest: specialRequest ?? null,
+              guestIdCard:    guestIdCard?.trim() || null,
             },
             include: {
               room: { select: { name: true, price: true, view: true } },

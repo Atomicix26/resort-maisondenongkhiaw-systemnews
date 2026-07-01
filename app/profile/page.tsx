@@ -269,6 +269,14 @@ export default function ProfilePage() {
                 <span className={`${roleColor} backdrop-blur text-white text-[10px] font-bold px-3 py-0.5 rounded-full tracking-widest uppercase shadow`}>
                   {profile?.role}
                 </span>
+                {profile?.createdAt && (
+                  <>
+                    <span className="text-white/50">·</span>
+                    <span className="text-white/80 text-[12px] drop-shadow">
+                      ສະໝັກເມື່ອ {new Date(profile.createdAt).toLocaleDateString("lo-LA", { year: "numeric", month: "long", day: "numeric" })}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 

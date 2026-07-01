@@ -148,6 +148,7 @@ model Booking {
   totalPrice     Decimal       @db.Decimal(10, 2)
   status         BookingStatus @default(PENDING)
   specialRequest String?       @db.Text
+  guestIdCard    String? // ເລກບັດປະຊາຊົນ/ພາສປອດ ຜູ້ເຂົ້າພັກ — ເກັບຕອນຈອງ
 
   actualCheckIn  DateTime? // เวลา check-in จริงล่าสุด
   actualCheckOut DateTime? // เวลา check-out จริงล่าสุด

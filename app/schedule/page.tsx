@@ -1,15 +1,14 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { useSession, signOut } from "next-auth/react"
+import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import {
-  BedDouble, CalendarCheck2, CalendarDays, Star, LogOut,
-  LayoutDashboard, X, MoreHorizontal, Loader2,
+  X, MoreHorizontal, Loader2,
   RefreshCw, Search, CheckCircle2, XCircle,
   LogIn, LogOut as LogOutIcon, CreditCard, Eye,
 } from "lucide-react"
+import { AdminSidebar } from "@/components/admin-sidebar"
 
 // ── Types ────────────────────────────────────────────────────────
 type BookingStatus = "PENDING"|"CONFIRMED"|"CHECKED_IN"|"CHECKED_OUT"|"COMPLETED"|"CANCELLED"
@@ -19,6 +18,7 @@ interface Booking {
   id: string; status: BookingStatus
   checkIn: string; checkOut: string
   guests: number; totalPrice: number
+  guestIdCard: string|null
   actualCheckIn: string|null; actualCheckOut: string|null
   user:  { id: string; name: string|null; lastName: string|null; email: string; phone: string|null }
   room:  { id: string; name: string; roomNumber: string|null }
@@ -52,48 +52,6 @@ const TRANSITIONS: Record<BookingStatus, { status: BookingStatus; label: string;
   CHECKED_OUT: [{ status:"COMPLETED",  label:"ສຳເລັດ",   color:"text-green-600",  icon:CheckCircle2 }],
   COMPLETED:   [],
   CANCELLED:   [],
-}
-
-// ── Sidebar ──────────────────────────────────────────────────────
-function Sidebar({ active, role }: { active: string; role?: string }) {
-  const nav = [
-    { icon: LayoutDashboard, label: "Dashboard", path: "/admin/dashboard" },
-    ...(role === "SUPERADMIN"
-      ? [
-          { icon: BedDouble,      label: "ຈັດການຫ້ອງ",     path: "/booking" },
-          { icon: CalendarCheck2, label: "ຈັດການພະນັກງານ", path: "/staff" },
-        ]
-      : []),
-    { icon: BedDouble, label: "Room Status", path: "/admin/room-status" },
-    { icon: CalendarDays, label: "ຈັດການການຈອງ", path: "/schedule" },
-    { icon: Star,         label: "ຈັດການລີວິວ",  path: "/review" },
-  ]
-
-  return (
-    <aside className="w-[210px] min-h-screen bg-[#1E1040] flex flex-col justify-between fixed left-0 top-0 z-40">
-      <div>
-        <div className="px-6 py-5 border-b border-white/10">
-          <p className="text-white/50 text-[10px] uppercase tracking-wider">Admin Panel</p>
-          <p className="text-white font-bold text-[14px] mt-0.5">Resort MDNK1</p>
-        </div>
-        <nav className="mt-3 px-3 space-y-0.5">
-          {nav.map(({ icon: Icon, label, path }) => (
-            <Link key={path} href={path}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[12px] font-medium transition-all
-                ${active === path
-                  ? "bg-white/10 text-white border-l-[3px] border-pink-400"
-                  : "text-white/60 hover:text-white hover:bg-white/5"}`}>
-              <Icon size={15} className="shrink-0" /> {label}
-            </Link>
-          ))}
-        </nav>
-      </div>
-      <button onClick={() => signOut({ callbackUrl: "/login" })}
-        className="flex items-center gap-2 px-6 py-5 text-white/50 hover:text-white text-[12px] transition-colors border-t border-white/10">
-        <LogOut size={14} /> ອອກຈາກລະບົບ
-      </button>
-    </aside>
-  )
 }
 
 // ── Detail Modal ─────────────────────────────────────────────────
@@ -158,6 +116,7 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
             <p className="text-[13px] font-semibold text-gray-800">{userName}</p>
             <p className="text-[11px] text-gray-400">{booking.user.email}</p>
             {booking.user.phone && <p className="text-[11px] text-gray-400">{booking.user.phone}</p>}
+            {booking.guestIdCard && <p className="text-[11px] text-gray-500 mt-0.5">🪪 {booking.guestIdCard}</p>}
           </div>
           <div className="bg-gray-50 rounded-xl p-3">
             <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">ຫ້ອງ</p>
@@ -345,7 +304,7 @@ export default function SchedulePage() {
 
   return (
     <div className="flex min-h-screen bg-[#F4F5F7] font-lao">
-      <Sidebar active="/schedule" role={session?.user?.role} />
+      <AdminSidebar />
 
       <main className="ml-[210px] flex-1 flex flex-col">
         <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-30">

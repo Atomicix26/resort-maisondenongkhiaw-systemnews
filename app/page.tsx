@@ -102,7 +102,7 @@ export default function Home() {
         <nav className="relative z-50 flex justify-between items-center px-8 py-4 container mx-auto">
           <p className="font-bold text-base tracking-wide drop-shadow">Resort MDNK1</p>
 
-          {session ? (
+          {session?.user ? (
             /* ถ้า login แล้ว → แสดงชื่อ + dropdown */
             <div className="relative group">
               <button className="bg-white/10 hover:bg-white/20 backdrop-blur px-4 py-1.5 rounded-lg flex items-center gap-2 text-[12px] border border-white/20 transition-all">
