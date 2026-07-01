@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { getStayPricing } from "@/lib/pricing"
+import { checkRateLimit, getIP, RATE_LIMITS, MAX_PENDING_BOOKINGS } from "@/lib/ratelimit"
 
 // ── ตรวจว่า error เกิดจาก serialization/deadlock (ควร retry) ──────────
 // P2034 = Prisma: transaction failed due to write conflict or deadlock
@@ -19,6 +20,19 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+  }
+
+  // ── Rate limit: กันยิงสร้าง booking รัวๆ ต่อ user และต่อ IP (BUG-016) ──────
+  const ip = getIP(request)
+  for (const key of [`booking:user:${session.user.id}`, `booking:ip:${ip}`]) {
+    const rl = checkRateLimit(key, RATE_LIMITS.booking)
+    if (!rl.allowed) {
+      const retryAfter = Math.max(1, Math.ceil((rl.resetAt - Date.now()) / 1000))
+      return NextResponse.json(
+        { message: "ພະຍາຍາມຫຼາຍເກີນໄປ ກະລຸນາລໍຖ້າສັກຄູ່" },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      )
+    }
   }
 
   let body: Record<string, string>
@@ -102,6 +116,14 @@ export async function POST(request: NextRequest) {
             throw new Error("ROOM_UNAVAILABLE")
           }
 
+          // กันยึดห้องด้วย booking ที่ยัง PENDING (ยังไม่จ่าย) เกินกำหนด (BUG-016)
+          const pendingCount = await tx.booking.count({
+            where: { userId: session.user.id, status: "PENDING", deletedAt: null },
+          })
+          if (pendingCount >= MAX_PENDING_BOOKINGS) {
+            throw new Error("TOO_MANY_PENDING")
+          }
+
           // 2. สร้าง Booking ด้วยราคาที่คำนวณจาก server
           const booking = await tx.booking.create({
             data: {
@@ -162,6 +184,12 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.message === "ROOM_UNAVAILABLE") {
       return NextResponse.json(
         { message: "ຫ້ອງນີ້ຖຶກຈອງໃນຊ່ວງວັນທີດັ່ງກ່າວແລ້ວ" },
+        { status: 409 }
+      )
+    }
+    if (error instanceof Error && error.message === "TOO_MANY_PENDING") {
+      return NextResponse.json(
+        { message: `Too many unpaid (PENDING) bookings — max ${MAX_PENDING_BOOKINGS}. Please pay or cancel an existing one first.` },
         { status: 409 }
       )
     }
