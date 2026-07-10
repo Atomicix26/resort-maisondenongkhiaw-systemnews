@@ -54,5 +54,10 @@ export const RATE_LIMITS = {
   login:    { limit: 10,  windowMs: 15 * 60 * 1000 },
   register: { limit: 5,   windowMs: 60 * 60 * 1000 },
   payment:  { limit: 10,  windowMs: 15 * 60 * 1000 },
+  booking:  { limit: 15,  windowMs: 15 * 60 * 1000 },
   api:      { limit: 100, windowMs: 60 * 1000       },
 }
+
+// จำนวนสูงสุดของ booking ที่ยัง PENDING (ยังไม่จ่าย) ต่อ user
+// กันการสร้าง booking รัวๆ เพื่อยึดห้องไว้โดยไม่ชำระเงิน (inventory lock)
+export const MAX_PENDING_BOOKINGS = 5

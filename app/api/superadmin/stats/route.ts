@@ -13,7 +13,7 @@ export async function GET() {
     const [totalUsers, totalAdmins, totalStaff, totalRooms,
            totalBookings, totalRevenue, recentLogs] = await Promise.all([
       prisma.user.count({ where: { deletedAt: null, role: "USER" } }),
-      prisma.user.count({ where: { deletedAt: null, role: "ADMIN" } }),
+      prisma.user.count({ where: { deletedAt: null, role: { in: ["ADMIN", "SUPERADMIN"] } } }),
       prisma.staff.count({ where: { isActive: true } }),
       prisma.room.count({ where: { deletedAt: null, isActive: true } }),
       prisma.booking.count({ where: { deletedAt: null } }),

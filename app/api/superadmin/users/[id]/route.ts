@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Role } from "@prisma/client"
+import { nextId } from "@/lib/ids"
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -52,7 +53,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       if (role === "ADMIN") {
         const existing = await tx.staff.findFirst({ where: { userId: id } })
         if (!existing) {
-          await tx.staff.create({ data: { userId: id } })
+          await tx.staff.create({ data: { id: nextId("staff"), userId: id } })
         } else {
           await tx.staff.updateMany({ where: { userId: id }, data: { isActive: true } })
         }

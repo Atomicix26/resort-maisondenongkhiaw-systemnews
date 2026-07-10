@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { checkRateLimit, RATE_LIMITS } from "@/lib/ratelimit"
+import { nextId } from "@/lib/ids"
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -46,6 +47,16 @@ export const authOptions: NextAuthOptions = {
 
           const isValid = await bcrypt.compare(credentials.password, user.password)
           if (!isValid) return null
+
+          // ── บันทึก AccessLog ทุกครั้งที่ login สำเร็จ (audit trail) ──────────
+          // best-effort: ถ้าเขียน log พลาดต้องไม่ทำให้ login ล้มเหลว
+          try {
+            await prisma.accessLog.create({
+              data: { id: nextId("accessLog"), userId: user.id, userType: user.role, ipAddress: ip },
+            })
+          } catch (logError) {
+            console.error("ACCESS_LOG_ERROR:", logError)
+          }
 
           return { id: user.id, email: user.email, name: user.name, role: user.role }
 
@@ -117,6 +128,30 @@ export const authOptions: NextAuthOptions = {
         session.user.role  = token.role  as string
       }
       return session
+    },
+  },
+
+  events: {
+    // ── บันทึกเวลา logout ลง AccessLog ล่าสุดของผู้ใช้ (ปิด audit trail login→logout) ──
+    // best-effort: ถ้าเขียนพลาดต้องไม่ทำให้ signOut ล้มเหลว
+    async signOut({ token }) {
+      const userId = token?.id as string | undefined
+      if (!userId) return
+      try {
+        const lastOpen = await prisma.accessLog.findFirst({
+          where: { userId, logoutTime: null },
+          orderBy: { loginTime: "desc" },
+          select: { id: true },
+        })
+        if (lastOpen) {
+          await prisma.accessLog.update({
+            where: { id: lastOpen.id },
+            data:  { logoutTime: new Date() },
+          })
+        }
+      } catch (logError) {
+        console.error("ACCESS_LOG_LOGOUT_ERROR:", logError)
+      }
     },
   },
 

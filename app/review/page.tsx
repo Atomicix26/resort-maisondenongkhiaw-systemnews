@@ -1,13 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSession, signOut } from "next-auth/react"
+import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import {
   Star, CheckCircle2, EyeOff, Flag, MessageSquare,
-  LogOut, BookOpen, Users, CalendarDays, LayoutDashboard,
 } from "lucide-react"
-import Link from "next/link"
+import { AdminSidebar } from "@/components/admin-sidebar"
+import { ProfileMenu } from "@/components/profile-menu"
 
 interface Review {
   id:        string
@@ -21,10 +21,10 @@ interface Review {
 }
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  PENDING:  { label: "รอตรวจ",   color: "bg-yellow-100 text-yellow-700" },
-  APPROVED: { label: "อนุมัติ",   color: "bg-green-100  text-green-700"  },
-  HIDDEN:   { label: "ซ่อน",     color: "bg-gray-100   text-gray-500"   },
-  FLAGGED:  { label: "มีปัญหา",  color: "bg-red-100    text-red-600"    },
+  PENDING:  { label: "ລໍຖ້າກວດ", color: "bg-yellow-100 text-yellow-700" },
+  APPROVED: { label: "ອະນຸມັດ",   color: "bg-green-100  text-green-700"  },
+  HIDDEN:   { label: "ຊ່ອນ",     color: "bg-gray-100   text-gray-500"   },
+  FLAGGED:  { label: "ມີບັນຫາ",  color: "bg-red-100    text-red-600"    },
 }
 
 function StarDisplay({ rating }: { rating: number }) {
@@ -92,7 +92,7 @@ export default function ReviewPage() {
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-400 text-sm animate-pulse">ກຳລັງໂຫລດ...</p>
+        <p className="text-gray-500 text-sm animate-pulse">ກຳລັງໂຫລດ...</p>
       </div>
     )
   }
@@ -100,45 +100,16 @@ export default function ReviewPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex font-lao">
 
-      {/* Sidebar */}
-      <aside className="w-56 bg-white border-r border-gray-100 flex flex-col fixed h-full z-10">
-        <div className="p-5 border-b border-gray-100">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider">Admin Panel</p>
-          <p className="font-bold text-gray-900 text-sm mt-0.5">Resort MDNK1</p>
-        </div>
-        <nav className="flex-1 p-3 space-y-0.5">
-          {[
-            { href: "/admin/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-            ...(session?.user?.role === "SUPERADMIN"
-              ? [
-                  { href: "/booking", icon: CalendarDays, label: "ຫ້ອງພັກ" },
-                  { href: "/staff",   icon: Users,        label: "ພະນັກງານ" },
-                ]
-              : []),
-            { href: "/admin/room-status", icon: CalendarDays, label: "Room Status" },
-            { href: "/schedule", icon: BookOpen, label: "ຕາຕະລາງ" },
-            { href: "/review",   icon: Star,     label: "ລີວິວ", active: true },
-          ].map(({ href, icon: Icon, label, active }) => (
-            <Link key={href} href={href}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] transition-colors
-                ${active ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-600 hover:bg-gray-50"}`}>
-              <Icon size={14} /> {label}
-            </Link>
-          ))}
-        </nav>
-        <div className="p-3 border-t border-gray-100">
-          <button onClick={() => signOut({ callbackUrl: "/login" })}
-            className="flex items-center gap-2 w-full px-3 py-2 text-[12px] text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-            <LogOut size={13} /> ອອກຈາກລະບົບ
-          </button>
-        </div>
-      </aside>
+      <AdminSidebar />
 
       {/* Main */}
-      <main className="flex-1 ml-56 p-8">
-        <div className="mb-6">
+      <main className="flex-1 ml-[210px] p-8">
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
           <h1 className="text-xl font-bold text-gray-900">ຈັດການລີວິວ</h1>
-          <p className="text-[12px] text-gray-400 mt-0.5">ອະນຸມັດ / ຊ່ອນ / ຕອບກັບລີວິວ</p>
+          <p className="text-[12px] text-gray-500 mt-0.5">ອະນຸມັດ / ຊ່ອນ / ຕອບກັບລີວິວ</p>
+          </div>
+          <ProfileMenu />
         </div>
 
         {/* Filter tabs */}
@@ -157,7 +128,7 @@ export default function ReviewPage() {
 
         {/* Review cards */}
         {filtered.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
+          <div className="text-center py-20 text-gray-500">
             <Star size={36} className="mx-auto mb-3 opacity-20" />
             <p className="text-sm">ບໍ່ມີລີວິວ</p>
           </div>
@@ -176,12 +147,12 @@ export default function ReviewPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <StarDisplay rating={review.rating} />
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${info.color}`}>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${info.color}`}>
                           {info.label}
                         </span>
                       </div>
                       <p className="font-semibold text-gray-800 text-[13px]">{userName}</p>
-                      <p className="text-[11px] text-gray-400 mb-2">ຫ້ອງ: {review.room?.name} · {new Date(review.createdAt).toLocaleDateString("lo-LA")}</p>
+                      <p className="text-[11px] text-gray-500 mb-2">ຫ້ອງ: {review.room?.name} · {new Date(review.createdAt).toLocaleDateString("lo-LA")}</p>
                       {review.comment && (
                         <p className="text-[12px] text-gray-600 bg-gray-50 rounded-lg p-3">{review.comment}</p>
                       )}

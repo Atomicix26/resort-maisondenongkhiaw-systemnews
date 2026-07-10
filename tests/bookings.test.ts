@@ -20,6 +20,14 @@ vi.mock("@/lib/prisma", () => ({
   },
 }))
 
+// Isolate the route from rate-limiting (cross-cutting concern tested separately).
+vi.mock("@/lib/ratelimit", () => ({
+  checkRateLimit: () => ({ allowed: true, remaining: 99, resetAt: Date.now() + 1000 }),
+  getIP: () => "unknown",
+  RATE_LIMITS: { booking: { limit: 15, windowMs: 900000 } },
+  MAX_PENDING_BOOKINGS: 5,
+}))
+
 vi.mock("@prisma/client", () => {
   class PrismaClientKnownRequestError extends Error {
     code: string
@@ -81,13 +89,14 @@ function mockTransactionSuccess() {
   const bookingCreate = vi.fn().mockResolvedValue({ id: "booking-1", totalPrice: 4000 })
   const payCreate = vi.fn().mockResolvedValue({ id: "tx-1", amount: 4000 })
   const findFirst = vi.fn().mockResolvedValue(null)
+  const count = vi.fn().mockResolvedValue(0)
   $transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
     cb({
-      booking: { findFirst, create: bookingCreate },
+      booking: { findFirst, count, create: bookingCreate },
       paymentTransaction: { create: payCreate },
     }),
   )
-  return { bookingCreate, payCreate, findFirst }
+  return { bookingCreate, payCreate, findFirst, count }
 }
 
 beforeEach(() => {
@@ -211,6 +220,23 @@ describe("POST /api/bookings — creation", () => {
     const res = await POST(req(validBody))
     expect(res.status).toBe(500)
   })
+
+  // BUG-016: กันยึดห้องด้วย PENDING ที่ยังไม่จ่ายเกินกำหนด
+  it("returns 409 when the user has too many unpaid PENDING bookings", async () => {
+    roomFindUnique.mockResolvedValue(activeRoom)
+    const findFirst = vi.fn().mockResolvedValue(null)
+    const count = vi.fn().mockResolvedValue(5) // = MAX_PENDING_BOOKINGS
+    const create = vi.fn()
+    $transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+      cb({
+        booking: { findFirst, count, create },
+        paymentTransaction: { create: vi.fn() },
+      }),
+    )
+    const res = await POST(req(validBody))
+    expect(res.status).toBe(409)
+    expect(create).not.toHaveBeenCalled()
+  })
 })
 
 // ── GET ──────────────────────────────────────────────────────────────
@@ -227,7 +253,7 @@ describe("GET /api/bookings", () => {
         id: "booking-1",
         totalPrice: 4000,
         room: { id: "room-1", name: "Sea View", images: '["a.jpg"]', view: "SEA", bedType: "KING" },
-        transactions: [{ status: "PAID", method: "TRANSFER", amount: 4000 }],
+        transactions: [{ type: "CHARGE", status: "PAID", method: "TRANSFER", amount: 4000 }],
         review: null,
       },
     ])

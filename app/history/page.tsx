@@ -8,8 +8,9 @@ import { useSession } from "next-auth/react"
 import {
   Search, Calendar, Bed, Users, ChevronRight,
   CheckCircle2, Clock, XCircle, AlertCircle,
-  CreditCard, Banknote, ArrowLeft, Loader2, X, Star,
+  CreditCard, Banknote, ArrowLeft, Loader2, X, Star, FileText,
 } from "lucide-react"
+import { computeRefund, REFUND_POLICY } from "@/lib/refund"
 
 // ── Types ────────────────────────────────────────────────────────
 interface Transaction {
@@ -29,6 +30,14 @@ interface ReviewSummary {
   createdAt: string
 }
 
+interface CancelRequestSummary {
+  id:          string
+  status:      string
+  reason:      string
+  refundable:  boolean
+  requestDate: string
+}
+
 interface Booking {
   id:             string
   checkIn:        string
@@ -40,7 +49,9 @@ interface Booking {
   createdAt:      string
   paymentStatus:  string
   paymentMethod:  string | null
+  paymentAmount:  number | null
   review:         ReviewSummary | null
+  cancelRequest:  CancelRequestSummary | null
   room: {
     id:      string
     name:    string
@@ -75,6 +86,13 @@ const methodIcon: Record<string, React.ElementType> = {
   CASH:        Banknote,
 }
 
+// สถานะคำขอยกเลิก (แยกจากสถานะ booking — อยู่ในตาราง CancelRequest)
+const cancelReqCfg: Record<string, { label: string; color: string }> = {
+  PENDING:  { label: "⏳ ຄຳຮ້ອງຍົກເລີກ — ລໍ Admin ອະນຸມັດ", color: "bg-amber-50 text-amber-700 border-amber-200" },
+  APPROVED: { label: "✓ ຄຳຮ້ອງຍົກເລີກ — ອະນຸມັດແລ້ວ",       color: "bg-red-50 text-red-600 border-red-200"      },
+  REJECTED: { label: "✕ ຄຳຮ້ອງຍົກເລີກ — ຖືກປະຕິເສດ",        color: "bg-gray-50 text-gray-500 border-gray-200"   },
+}
+
 function calcDays(ci: string, co: string) {
   return Math.max(0, Math.floor((new Date(co).getTime() - new Date(ci).getTime()) / 86400000))
 }
@@ -88,17 +106,37 @@ function CancelModal({ booking, onClose, onDone }: {
   onDone:  () => void
 }) {
   const [reason,  setReason]  = useState("")
+  const [bankName, setBankName] = useState("")
+  const [accName,  setAccName]  = useState("")
+  const [accNo,    setAccNo]    = useState("")
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState("")
 
+  // จ่ายมาแล้วเท่าไหร่ → คำนวณเงินคืนโดยประมาณตามนโยบายเวลา (ณ ตอนนี้)
+  const paidAmount = booking.paymentStatus === "PAID"
+    ? (booking.paymentAmount ?? booking.totalPrice)
+    : 0
+  const refund = computeRefund(paidAmount, new Date(booking.checkIn))
+  const needBank = refund.amount > 0
+
   async function handleCancel() {
     if (!reason.trim()) { setError("ກະລຸນາລະບຸເຫດຜົນ"); return }
+    if (needBank && (!bankName.trim() || !accName.trim() || !accNo.trim())) {
+      setError("ກະລຸນາລະບຸບັນຊີຮັບເງິນຄືນ"); return
+    }
     setLoading(true); setError("")
     try {
       const res  = await fetch("/api/cancel-requests", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ bookingId: booking.id, reason }),
+        body:    JSON.stringify({
+          bookingId: booking.id, reason,
+          ...(needBank ? {
+            refundBankName:      bankName.trim(),
+            refundAccountName:   accName.trim(),
+            refundAccountNumber: accNo.trim(),
+          } : {}),
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.message ?? "ບໍ່ສຳເລັດ"); return }
@@ -113,7 +151,7 @@ function CancelModal({ booking, onClose, onDone }: {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 font-lao">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative">
-        <button onClick={onClose} className="absolute top-5 right-5 text-gray-400 hover:text-gray-700">
+        <button onClick={onClose} className="absolute top-5 right-5 text-gray-500 hover:text-gray-700">
           <X size={18} />
         </button>
         <div className="flex items-center gap-3 mb-5">
@@ -122,16 +160,53 @@ function CancelModal({ booking, onClose, onDone }: {
           </div>
           <div>
             <h3 className="text-[15px] font-bold text-gray-900">ຂໍຍົກເລີກການຈອງ</h3>
-            <p className="text-[11px] text-gray-400">{booking.room.name} · {fmtDate(booking.checkIn)}</p>
+            <p className="text-[11px] text-gray-500">{booking.room.name} · {fmtDate(booking.checkIn)}</p>
           </div>
         </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-5">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
           <p className="text-[12px] text-amber-700 flex items-start gap-2">
             <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
             Admin ຈະກວດສອບຄຳຮ້ອງ — ການຍົກເລີກຈະມີຜົນຫຼັງໄດ້ຮັບການອະນຸມັດ
           </p>
         </div>
-        <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1 block">
+
+        {/* นโยบายเงินคืน */}
+        <div className="border border-gray-200 rounded-lg px-4 py-3 mb-4">
+          <p className="text-[11px] font-semibold text-gray-500 mb-1.5">ນະໂຍບາຍເງິນຄืນ (คิดตามเวลาก่อน Check-in)</p>
+          <ul className="space-y-0.5">
+            {REFUND_POLICY.map((p) => (
+              <li key={p.percent} className="flex justify-between text-[11px] text-gray-500">
+                <span>{p.label}</span>
+                <span className={`font-semibold ${p.percent > 0 ? "text-green-600" : "text-red-500"}`}>ຄืน {p.percent}%</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* ยอดคืนโดยประมาณ + บัญชีรับเงินคืน (เฉพาะเมื่อจ่ายมาแล้ว) */}
+        {needBank ? (
+          <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-4">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-[12px] text-gray-600">ຍอดคืนโดยประมาณ ({refund.percent}%)</span>
+              <span className="text-[15px] font-bold text-green-700">{fmt(refund.amount)} ₭</span>
+            </div>
+            <p className="text-[11px] text-gray-500 mb-2">* ຍอดจริงยืนยันโดย Admin ตอนอนุมัติ · โอนคืนภายใน 3–7 ວັນທຳການ</p>
+            <div className="space-y-2">
+              <input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="ທະນາຄານ (เช่น BCEL)"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-green-300" />
+              <input value={accName} onChange={(e) => setAccName(e.target.value)} placeholder="ຊື່ບັນຊີ"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-green-300" />
+              <input value={accNo} onChange={(e) => setAccNo(e.target.value)} placeholder="ເລກບັນຊີ"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-green-300" />
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 mb-4">
+            <p className="text-[11px] text-gray-500">ການຈອງนี้ยังไม่มีการชำระเงิน — ไม่มียอดต้องคืน</p>
+          </div>
+        )}
+
+        <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1 block">
           ເຫດຜົນການຍົກເລີກ
         </label>
         <textarea
@@ -201,7 +276,7 @@ function ReviewModal({ booking, onClose, onDone }: {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 font-lao">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative">
-        <button onClick={onClose} className="absolute top-5 right-5 text-gray-400 hover:text-gray-700">
+        <button onClick={onClose} className="absolute top-5 right-5 text-gray-500 hover:text-gray-700">
           <X size={18} />
         </button>
 
@@ -211,7 +286,7 @@ function ReviewModal({ booking, onClose, onDone }: {
           </div>
           <div>
             <h3 className="text-[15px] font-bold text-gray-900">Review your stay</h3>
-            <p className="text-[11px] text-gray-400">{booking.room.name} - {fmtDate(booking.checkIn)}</p>
+            <p className="text-[11px] text-gray-500">{booking.room.name} - {fmtDate(booking.checkIn)}</p>
           </div>
         </div>
 
@@ -226,7 +301,7 @@ function ReviewModal({ booking, onClose, onDone }: {
                 className="p-1 text-amber-400 hover:scale-110 transition-transform"
                 aria-label={`Rate ${value} stars`}
               >
-                <Star size={24} className={value <= rating ? "fill-amber-400" : "fill-transparent text-gray-300"} />
+                <Star size={24} className={value <= rating ? "fill-amber-400" : "fill-transparent text-gray-400"} />
               </button>
             )
           })}
@@ -271,13 +346,19 @@ function BookingCard({ booking, onCancel, onReview }: {
   const [expanded, setExpanded] = useState(false)
   const bCfg  = bookingStatusCfg[booking.status]  ?? bookingStatusCfg.PENDING
   const pCfg  = paymentStatusCfg[booking.paymentStatus] ?? paymentStatusCfg.PENDING
+  // จ่ายที่โรงแรม (CASH) + ยังไม่จ่าย → ไม่ใช่ "ค้างชำระ" แต่คือจ่ายตอนเช็คอิน
+  const payLabel = booking.paymentStatus === "PENDING" && booking.paymentMethod === "CASH"
+    ? { label: "ຊຳລະທີ່ໂຮงແຮມ", color: "text-indigo-600" }
+    : pCfg
   const BIcon = bCfg.icon
   const days  = calcDays(booking.checkIn, booking.checkOut)
   const cover = booking.room.images?.[0] && !booking.room.images[0].includes("placeholder")
     ? booking.room.images[0] : "/room.png"
   const MethodIcon = booking.paymentMethod ? (methodIcon[booking.paymentMethod] ?? Banknote) : Banknote
-  const canCancel  = ["PENDING", "CONFIRMED"].includes(booking.status)
+  const hasCancelReq = !!booking.cancelRequest
+  const canCancel  = ["PENDING", "CONFIRMED"].includes(booking.status) && !hasCancelReq
   const canReview  = booking.status === "COMPLETED"
+  const canVoucher = ["CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "COMPLETED"].includes(booking.status)
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-200">
@@ -294,9 +375,9 @@ function BookingCard({ booking, onCancel, onReview }: {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h3 className="text-[14px] font-bold text-gray-900 truncate">{booking.room.name}</h3>
-              <p className="text-[11px] text-gray-400 mt-0.5">{booking.room.view}</p>
+              <p className="text-[11px] text-gray-500 mt-0.5">{booking.room.view}</p>
             </div>
-            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold border flex-shrink-0 ${bCfg.color}`}>
+            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border flex-shrink-0 ${bCfg.color}`}>
               <BIcon size={10} /> {bCfg.label}
             </span>
           </div>
@@ -309,17 +390,26 @@ function BookingCard({ booking, onCancel, onReview }: {
             <span className="flex items-center gap-1"><Users size={11} /> {booking.guests} ທ່ານ</span>
           </div>
 
+          {/* สถานะคำขอยกเลิก (ถ้ามี) */}
+          {booking.cancelRequest && (
+            <div className={`mt-2 inline-flex items-center gap-1.5 self-start px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${
+              cancelReqCfg[booking.cancelRequest.status]?.color ?? cancelReqCfg.PENDING.color
+            }`}>
+              {cancelReqCfg[booking.cancelRequest.status]?.label ?? booking.cancelRequest.status}
+            </div>
+          )}
+
           <div className="flex items-center justify-between mt-3">
             <div>
               <p className="text-[18px] font-black text-blue-600">{fmt(booking.totalPrice)} ₭</p>
-              <p className={`text-[10px] font-semibold flex items-center gap-1 ${pCfg.color}`}>
-                <MethodIcon size={10} /> {pCfg.label}
+              <p className={`text-[11px] font-semibold flex items-center gap-1 ${payLabel.color}`}>
+                <MethodIcon size={10} /> {payLabel.label}
               </p>
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Pay button ถ้ายังไม่จ่าย */}
-              {booking.paymentStatus === "PENDING" && canCancel && (
+              {/* Pay button — เฉพาะ booking ที่ยัง PENDING (ยืนยันแล้วไม่ต้องจ่ายออนไลน์) */}
+              {booking.paymentStatus === "PENDING" && booking.status === "PENDING" && (
                 <Link href={`/payment?bookingId=${booking.id}&roomId=${booking.room.id}&checkIn=${booking.checkIn.split("T")[0]}&checkOut=${booking.checkOut.split("T")[0]}`}
                   className="text-[11px] bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-semibold transition-all">
                   ຊຳລະ
@@ -332,6 +422,12 @@ function BookingCard({ booking, onCancel, onReview }: {
                   ຍົກເລີກ
                 </button>
               )}
+              {canVoucher && (
+                <Link href={`/voucher/${booking.id}`}
+                  className="inline-flex items-center gap-1 text-[11px] border border-green-200 text-green-600 hover:bg-green-50 px-3 py-1.5 rounded-lg font-medium transition-all">
+                  <FileText size={11} /> ໃບຢືນຢັນ
+                </Link>
+              )}
               {canReview && (
                 <button onClick={onReview}
                   className="inline-flex items-center gap-1 text-[11px] border border-amber-200 text-amber-600 hover:bg-amber-50 px-3 py-1.5 rounded-lg font-medium transition-all">
@@ -341,7 +437,7 @@ function BookingCard({ booking, onCancel, onReview }: {
               )}
               {/* Expand details */}
               <button onClick={() => setExpanded(!expanded)}
-                className="text-[11px] text-gray-400 hover:text-gray-700 flex items-center gap-1 transition-all">
+                className="text-[11px] text-gray-500 hover:text-gray-700 flex items-center gap-1 transition-all">
                 ລາຍລະອຽດ
                 <ChevronRight size={12} className={`transition-transform ${expanded ? "rotate-90" : ""}`} />
               </button>
@@ -355,16 +451,16 @@ function BookingCard({ booking, onCancel, onReview }: {
         <div className="border-t border-gray-100 px-5 py-4 bg-gray-50/50 space-y-3">
           <div className="grid grid-cols-2 gap-4 text-[12px]">
             <div>
-              <p className="text-gray-400 text-[10px] uppercase tracking-wide mb-1">Booking ID</p>
+              <p className="text-gray-500 text-[11px] uppercase tracking-wide mb-1">Booking ID</p>
               <p className="font-mono text-gray-700 text-[11px]">{booking.id}</p>
             </div>
             <div>
-              <p className="text-gray-400 text-[10px] uppercase tracking-wide mb-1">ວັນທີຈອງ</p>
+              <p className="text-gray-500 text-[11px] uppercase tracking-wide mb-1">ວັນທີຈອງ</p>
               <p className="text-gray-700">{fmtDate(booking.createdAt)}</p>
             </div>
             {booking.specialRequest && (
               <div className="col-span-2">
-                <p className="text-gray-400 text-[10px] uppercase tracking-wide mb-1">ຄຳຮ້ອງຂໍພິເສດ</p>
+                <p className="text-gray-500 text-[11px] uppercase tracking-wide mb-1">ຄຳຮ້ອງຂໍພິເສດ</p>
                 <p className="text-gray-700">{booking.specialRequest}</p>
               </div>
             )}
@@ -373,26 +469,26 @@ function BookingCard({ booking, onCancel, onReview }: {
           {/* Transactions */}
           {booking.transactions.length > 0 && (
             <div>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-2">ປະຫວັດການຊຳລະ</p>
+              <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-2">ປະຫວັດການຊຳລະ</p>
               {booking.transactions.map((tx) => {
                 const txPCfg = paymentStatusCfg[tx.status] ?? paymentStatusCfg.PENDING
                 const TxIcon = methodIcon[tx.method] ?? Banknote
                 return (
                   <div key={tx.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-gray-100 mb-1.5">
                     <div className="flex items-center gap-2">
-                      <TxIcon size={13} className="text-gray-400" />
+                      <TxIcon size={13} className="text-gray-500" />
                       <div>
                         <p className="text-[11px] font-medium text-gray-800">
                           {tx.type === "CHARGE" ? "ຊຳລະ" : tx.type === "REFUND" ? "ຄືນເງິນ" : "ປັດຕ່ຳ"}
                         </p>
-                        <p className="text-[10px] text-gray-400">
+                        <p className="text-[11px] text-gray-500">
                           {tx.paymentDate ? fmtDate(tx.paymentDate) : "ຍັງບໍ່ຊຳລະ"}
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-[12px] font-bold text-gray-800">{fmt(tx.amount)} ₭</p>
-                      <p className={`text-[10px] font-semibold ${txPCfg.color}`}>{txPCfg.label}</p>
+                      <p className={`text-[11px] font-semibold ${txPCfg.color}`}>{txPCfg.label}</p>
                     </div>
                   </div>
                 )
@@ -473,20 +569,25 @@ export default function HistoryPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-20 shadow-sm">
         <div className="container mx-auto px-6 py-4 flex items-center gap-4">
-          <button onClick={() => router.back()}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-            <ArrowLeft size={16} className="text-gray-600" />
+          {/* ถอยกลับ — ถ้าไม่มีหน้าเดิมในประวัติ (เข้าตรง/หลัง login) ให้กลับหน้าโปรไฟล์ */}
+          <button
+            onClick={() => {
+              if (typeof window !== "undefined" && window.history.length > 1) router.back()
+              else router.push("/profile")
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 text-[12px]">
+            <ArrowLeft size={16} /> ກັບຄืน
           </button>
           <div className="flex-1">
             <h1 className="text-[16px] font-bold text-gray-900">ປະຫວັດການຈອງ</h1>
-            <p className="text-[11px] text-gray-400">
+            <p className="text-[11px] text-gray-500">
               {session?.user?.name ?? session?.user?.email}
             </p>
           </div>
 
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={13} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={13} />
             <input
               type="text" placeholder="ຄົ້ນຫາ..." value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -509,7 +610,7 @@ export default function HistoryPage() {
                     : "text-gray-500 hover:bg-gray-100"
                 }`}>
                 {t.label}
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-bold ${
                   filter === t.key ? "bg-white/20" : "bg-gray-200 text-gray-600"
                 }`}>
                   {count}
@@ -534,9 +635,9 @@ export default function HistoryPage() {
         {!loading && displayed.length === 0 && (
           <div className="text-center py-24">
             <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-              <Calendar size={28} className="text-gray-300" />
+              <Calendar size={28} className="text-gray-400" />
             </div>
-            <p className="text-[14px] text-gray-400 font-medium">
+            <p className="text-[14px] text-gray-500 font-medium">
               {search || filter !== "ALL" ? "ບໍ່ພົບລາຍການທີ່ຄົ້ນຫາ" : "ຍັງບໍ່ມີປະຫວັດການຈອງ"}
             </p>
             {!search && filter === "ALL" && (

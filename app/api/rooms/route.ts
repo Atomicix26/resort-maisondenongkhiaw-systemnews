@@ -2,7 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { RoomStatus } from "@prisma/client"
+import { Prisma, RoomStatus } from "@prisma/client"
+import { nextId } from "@/lib/ids"
 
 // GET /api/rooms — ดึงทุกห้อง (user + admin ใช้ร่วม)
 export async function GET(request: NextRequest) {
@@ -86,6 +87,7 @@ export async function POST(request: NextRequest) {
 
     const room = await prisma.room.create({
       data: {
+        id: nextId("room"),
         roomNumber, name, description,
         price:     parseFloat(price),
         capacity:  parseInt(capacity),
@@ -99,6 +101,9 @@ export async function POST(request: NextRequest) {
     })
     return NextResponse.json(room, { status: 201 })
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json({ error: "ໝາຍເລກຫ້ອງນີ້ມີໃນລະບົບແລ້ວ" }, { status: 409 })
+    }
     console.error("[ROOMS_POST]", error)
     return NextResponse.json({ error: "Failed to create room" }, { status: 500 })
   }

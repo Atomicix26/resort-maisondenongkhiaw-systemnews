@@ -85,7 +85,7 @@ export default function RegisterPage() {
         </Link>
 
         <h1 className="text-3xl font-bold mb-2">ລົງທະບຽນ</h1>
-        <p className="text-gray-400 text-sm mb-8">ກະລຸນາປ້ອນຂໍ້ມູນ</p>
+        <p className="text-gray-500 text-sm mb-8">ກະລຸນາປ້ອນຂໍ້ມູນ</p>
 
         <form onSubmit={handleRegister} className="space-y-5">
           <input
@@ -134,7 +134,7 @@ export default function RegisterPage() {
           </button>
         </form>
 
-        <p className="text-gray-400 text-xs mt-6">
+        <p className="text-gray-500 text-xs mt-6">
           ມີບັນຊີແລ້ວບໍ?{" "}
           <Link href="/login" className="text-blue-500 hover:underline ml-1">
             ເຂົ້າສູ່ລະບົບ

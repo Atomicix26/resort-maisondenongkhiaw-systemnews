@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { computeRefund } from "@/lib/refund"
+import { nextId } from "@/lib/ids"
 
 // POST — User ส่งคำขอยกเลิก
 export async function POST(request: NextRequest) {
@@ -10,7 +12,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
   }
 
-  let body: { bookingId?: string; reason?: string }
+  let body: {
+    bookingId?: string; reason?: string
+    refundBankName?: string; refundAccountName?: string; refundAccountNumber?: string
+  }
   try {
     body = await request.json()
   } catch {
@@ -24,9 +29,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // ตรวจสอบ booking เป็นของ user นี้
+    // ตรวจสอบ booking เป็นของ user นี้ + ดึงยอดที่จ่ายมาแล้ว (PAID CHARGE)
     const booking = await prisma.booking.findUnique({
-      where: { id: bookingId, deletedAt: null },
+      where:   { id: bookingId, deletedAt: null },
+      include: {
+        transactions: {
+          where:   { type: "CHARGE", status: "PAID" },
+          orderBy: { createdAt: "desc" },
+          take:    1,
+        },
+      },
     })
 
     if (!booking) {
@@ -53,12 +65,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // ── ยอดที่จ่ายมาแล้วจริง → คำนวณเงินคืนตามนโยบายเวลา (ตอนขอยกเลิก) ──
+    const paidAmount = booking.transactions[0] ? Number(booking.transactions[0].amount) : 0
+    const hasRefund  = paidAmount > 0
+    const { percent, amount } = hasRefund
+      ? computeRefund(paidAmount, booking.checkIn)
+      : { percent: 0, amount: 0 }
+
+    // ต้องมีบัญชีรับเงินคืน ถ้ามียอดต้องคืน (ไม่มี payment gateway → โอนคืนมือ)
+    const bankName = body.refundBankName?.trim()
+    const accName  = body.refundAccountName?.trim()
+    const accNo    = body.refundAccountNumber?.trim()
+    if (amount > 0 && (!bankName || !accName || !accNo)) {
+      return NextResponse.json(
+        { message: "ກະລຸນາລະບຸ ທะນາຄານ / ຊື່ບັນຊີ / ເລກບັນຊີ ສຳລັບຮັບເງິນຄືນ" },
+        { status: 400 }
+      )
+    }
+
     const cancelReq = await prisma.cancelRequest.create({
       data: {
+        id:                  nextId("cancelRequest"),
         bookingId,
-        userId: session.user.id,
-        reason: reason.trim(),
-        status: "PENDING",
+        userId:              session.user.id,
+        reason:              reason.trim(),
+        status:              "PENDING",
+        refundable:          hasRefund,
+        refundPercent:       hasRefund ? percent : null,
+        refundAmount:        hasRefund ? amount  : null,
+        refundBankName:      amount > 0 ? bankName : null,
+        refundAccountName:   amount > 0 ? accName  : null,
+        refundAccountNumber: amount > 0 ? accNo    : null,
       },
     })
 

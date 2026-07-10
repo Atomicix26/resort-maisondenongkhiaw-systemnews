@@ -1,20 +1,25 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
-import { useSession, signOut } from "next-auth/react"
+import { useEffect, useState, useCallback, useRef } from "react"
+import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import {
-  BedDouble, CalendarCheck2, CalendarDays, Star, LogOut,
-  LayoutDashboard, X, MoreHorizontal, Loader2,
+  X, MoreHorizontal, Loader2,
   RefreshCw, Search, CheckCircle2, XCircle,
   LogIn, LogOut as LogOutIcon, CreditCard, Eye,
+  FileText, Camera, UserX,
 } from "lucide-react"
+import { AdminSidebar } from "@/components/admin-sidebar"
+import { ProfileMenu } from "@/components/profile-menu"
 
 // ── Types ────────────────────────────────────────────────────────
-type BookingStatus = "PENDING"|"CONFIRMED"|"CHECKED_IN"|"CHECKED_OUT"|"COMPLETED"|"CANCELLED"
+type BookingStatus = "PENDING"|"CONFIRMED"|"CHECKED_IN"|"CHECKED_OUT"|"COMPLETED"|"CANCELLED"|"NO_SHOW"
 type PaymentStatus = "PENDING"|"PENDING_VERIFY"|"PAID"|"FAILED"|"REFUNDED"
 
+interface CheckInDoc {
+  docType: string|null; docNumber: string|null; nationality: string|null
+  docExpiry: string|null; docImage: string|null
+}
 interface Booking {
   id: string; status: BookingStatus
   checkIn: string; checkOut: string
@@ -22,9 +27,14 @@ interface Booking {
   actualCheckIn: string|null; actualCheckOut: string|null
   user:  { id: string; name: string|null; lastName: string|null; email: string; phone: string|null }
   room:  { id: string; name: string; roomNumber: string|null }
-  transactions: { id: string; status: PaymentStatus; amount: number; slipImage: string|null }[]
+  transactions: { id: string; type: string; status: PaymentStatus; amount: number; slipImage: string|null }[]
   approval:      { status: string } | null
-  cancelRequest: { status: string; reason: string } | null
+  cancelRequest: {
+    id: string; status: string; reason: string; refundable: boolean
+    refundPercent: number|null; refundAmount: number|null
+    refundBankName: string|null; refundAccountName: string|null; refundAccountNumber: string|null
+  } | null
+  checkInLogs?:  CheckInDoc[]
 }
 
 // ── Config ───────────────────────────────────────────────────────
@@ -35,65 +45,32 @@ const ST_CFG: Record<BookingStatus, { label: string; color: string; dot: string 
   CHECKED_OUT: { label: "Check-out",  color: "bg-indigo-100 text-indigo-700",  dot: "bg-indigo-500"  },
   COMPLETED:   { label: "ສຳເລັດ",     color: "bg-green-100  text-green-700",   dot: "bg-green-500"   },
   CANCELLED:   { label: "ຍົກເລີກ",    color: "bg-red-100    text-red-600",     dot: "bg-red-400"     },
+  NO_SHOW:     { label: "ບໍ່ມາ",      color: "bg-orange-100 text-orange-700",  dot: "bg-orange-400"  },
 }
 const PAY_CFG: Record<PaymentStatus, { label: string; color: string }> = {
-  PENDING:        { label: "ຍັງບໍ່ຊຳລະ",    color: "text-gray-400"   },
+  PENDING:        { label: "ຍັງບໍ່ຊຳລະ",    color: "text-gray-500"   },
   PENDING_VERIFY: { label: "ລໍຕຮວດ slip",  color: "text-orange-500" },
   PAID:           { label: "ຊຳລະແລ້ວ",     color: "text-green-600"  },
   FAILED:         { label: "ຊຳລະຜິດ",      color: "text-red-500"    },
   REFUNDED:       { label: "ຄືນເງິນແລ້ວ",  color: "text-blue-500"   },
 }
+const DOC_TYPE_LABEL: Record<string, string> = {
+  ID_CARD:  "ບັດປະຊາຊົນ",
+  PASSPORT: "ພາສປອດ",
+  OTHER:    "ອື່ນໆ",
+}
 const TRANSITIONS: Record<BookingStatus, { status: BookingStatus; label: string; color: string; icon: React.ElementType }[]> = {
   PENDING:     [{ status:"CONFIRMED",  label:"ຢືນຢັນ",   color:"text-blue-600",   icon:CheckCircle2 },
+                { status:"NO_SHOW",    label:"ບໍ່ມາ",    color:"text-orange-500", icon:UserX        },
                 { status:"CANCELLED",  label:"ຍົກເລີກ",  color:"text-red-500",    icon:XCircle      }],
   CONFIRMED:   [{ status:"CHECKED_IN", label:"Check-in", color:"text-purple-600", icon:LogIn        },
+                { status:"NO_SHOW",    label:"ບໍ່ມາ",    color:"text-orange-500", icon:UserX        },
                 { status:"CANCELLED",  label:"ຍົກເລີກ",  color:"text-red-500",    icon:XCircle      }],
   CHECKED_IN:  [{ status:"CHECKED_OUT",label:"Check-out",color:"text-indigo-600", icon:LogOutIcon   }],
   CHECKED_OUT: [{ status:"COMPLETED",  label:"ສຳເລັດ",   color:"text-green-600",  icon:CheckCircle2 }],
   COMPLETED:   [],
   CANCELLED:   [],
-}
-
-// ── Sidebar ──────────────────────────────────────────────────────
-function Sidebar({ active, role }: { active: string; role?: string }) {
-  const nav = [
-    { icon: LayoutDashboard, label: "Dashboard", path: "/admin/dashboard" },
-    ...(role === "SUPERADMIN"
-      ? [
-          { icon: BedDouble,      label: "ຈັດການຫ້ອງ",     path: "/booking" },
-          { icon: CalendarCheck2, label: "ຈັດການພະນັກງານ", path: "/staff" },
-        ]
-      : []),
-    { icon: BedDouble, label: "Room Status", path: "/admin/room-status" },
-    { icon: CalendarDays, label: "ຈັດການການຈອງ", path: "/schedule" },
-    { icon: Star,         label: "ຈັດການລີວິວ",  path: "/review" },
-  ]
-
-  return (
-    <aside className="w-[210px] min-h-screen bg-[#1E1040] flex flex-col justify-between fixed left-0 top-0 z-40">
-      <div>
-        <div className="px-6 py-5 border-b border-white/10">
-          <p className="text-white/50 text-[10px] uppercase tracking-wider">Admin Panel</p>
-          <p className="text-white font-bold text-[14px] mt-0.5">Resort MDNK1</p>
-        </div>
-        <nav className="mt-3 px-3 space-y-0.5">
-          {nav.map(({ icon: Icon, label, path }) => (
-            <Link key={path} href={path}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[12px] font-medium transition-all
-                ${active === path
-                  ? "bg-white/10 text-white border-l-[3px] border-pink-400"
-                  : "text-white/60 hover:text-white hover:bg-white/5"}`}>
-              <Icon size={15} className="shrink-0" /> {label}
-            </Link>
-          ))}
-        </nav>
-      </div>
-      <button onClick={() => signOut({ callbackUrl: "/login" })}
-        className="flex items-center gap-2 px-6 py-5 text-white/50 hover:text-white text-[12px] transition-colors border-t border-white/10">
-        <LogOut size={14} /> ອອກຈາກລະບົບ
-      </button>
-    </aside>
-  )
+  NO_SHOW:     [],
 }
 
 // ── Detail Modal ─────────────────────────────────────────────────
@@ -105,22 +82,86 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
   const [rejectReason, setRejectReason] = useState("")
   const [error,        setError]        = useState("")
 
+  // ── ฟอร์มเอกสารยืนยันตัวตน (ตอน check-in) ──
+  const [docType,      setDocType]      = useState("")
+  const [docNumber,    setDocNumber]    = useState("")
+  const [nationality,  setNationality]  = useState("")
+  const [docExpiry,    setDocExpiry]    = useState("")
+  const [docFile,      setDocFile]      = useState<File|null>(null)
+  const [docPreview,   setDocPreview]   = useState("")
+  const docRef = useRef<HTMLInputElement>(null)
+
+  function onDocFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setDocFile(f)
+    setDocPreview((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(f) })
+  }
+
+  // revoke ObjectURL ตอนปิดโมดัล — กัน memory leak
+  useEffect(() => () => { if (docPreview) URL.revokeObjectURL(docPreview) }, [docPreview])
+
+  // ── จัดการคำขอยกเลิก (admin) ──
+  const [cancelBusy, setCancelBusy] = useState(false)
+  const refundRef = useRef<HTMLInputElement>(null)
+
+  async function actOnCancel(action: "APPROVE" | "REJECT") {
+    if (!booking.cancelRequest) return
+    setCancelBusy(true); setError("")
+    try {
+      const res = await fetch(`/api/admin/cancel-requests/${booking.cancelRequest.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? "ບໍ່ສຳເລັດ"); setCancelBusy(false); return }
+      onUpdated(); onClose()
+    } catch { setError("ເກີດຂໍ້ຜິດພາດ"); setCancelBusy(false) }
+  }
+
+  async function uploadRefundSlip(file: File) {
+    if (!booking.cancelRequest) return
+    setCancelBusy(true); setError("")
+    try {
+      const fd = new FormData(); fd.append("slipFile", file)
+      const res = await fetch(`/api/admin/cancel-requests/${booking.cancelRequest.id}`, { method: "PATCH", body: fd })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? "ບໍ່ສຳເລັດ"); setCancelBusy(false); return }
+      onUpdated(); onClose()
+    } catch { setError("ເກີດຂໍ້ຜິດພາດ"); setCancelBusy(false) }
+  }
+
   async function changeStatus(status: BookingStatus) {
     setSaving(status); setError("")
-    const body: Record<string, unknown> = { status }
-    if (status === "CHECKED_IN")  body.actualCheckIn  = new Date().toISOString()
-    if (status === "CHECKED_OUT") body.actualCheckOut = new Date().toISOString()
-    if (remarks) {
-      if (status === "CHECKED_IN")  body.checkInRemarks  = remarks
-      if (status === "CHECKED_OUT") body.checkOutRemarks = remarks
+    try {
+      let res: Response
+      if (status === "CHECKED_IN") {
+        // check-in → multipart พร้อมเอกสารยืนยันตัวตน + รูปถ่าย
+        const fd = new FormData()
+        fd.append("status", status)
+        fd.append("actualCheckIn", new Date().toISOString())
+        if (remarks)     fd.append("checkInRemarks", remarks)
+        if (docType)     fd.append("docType", docType)
+        if (docNumber)   fd.append("docNumber", docNumber)
+        if (nationality) fd.append("nationality", nationality)
+        if (docExpiry)   fd.append("docExpiry", docExpiry)
+        if (docFile)     fd.append("docImage", docFile)
+        res = await fetch(`/api/admin/bookings/${booking.id}`, { method: "PATCH", body: fd })
+      } else {
+        const body: Record<string, unknown> = { status }
+        if (status === "CHECKED_OUT") body.actualCheckOut = new Date().toISOString()
+        if (remarks && status === "CHECKED_OUT") body.checkOutRemarks = remarks
+        res = await fetch(`/api/admin/bookings/${booking.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+      }
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? "ບໍ່ສຳເລັດ"); setSaving(null); return }
+      onUpdated(); onClose()
+    } catch {
+      setError("ເກີດຂໍ້ຜິດພາດ"); setSaving(null)
     }
-    const res  = await fetch(`/api/admin/bookings/${booking.id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-    const data = await res.json()
-    if (!res.ok) { setError(data.error ?? "ບໍ່ສຳເລັດ"); setSaving(null); return }
-    onUpdated(); onClose()
   }
 
   async function verifyPayment(txId: string, status: "PAID"|"FAILED", reason?: string) {
@@ -134,7 +175,7 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
     onUpdated(); onClose()
   }
 
-  const tx        = booking.transactions[0]
+  const tx        = booking.transactions.find((t) => t.type === "CHARGE") ?? booking.transactions[0]
   const stCfg     = ST_CFG[booking.status]
   const userName  = [booking.user.name, booking.user.lastName].filter(Boolean).join(" ") || booking.user.email
   const checkInFmt  = new Date(booking.checkIn).toLocaleDateString("lo-LA",  { day: "2-digit", month: "short", year: "numeric" })
@@ -144,26 +185,26 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-7 relative max-h-[90vh] overflow-y-auto">
-        <button onClick={onClose} className="absolute top-5 right-5 text-gray-300 hover:text-gray-600"><X size={18} /></button>
+        <button onClick={onClose} className="absolute top-5 right-5 text-gray-400 hover:text-gray-600"><X size={18} /></button>
 
         <div className="flex items-center gap-3 mb-5">
           <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${stCfg.color}`}>{stCfg.label}</span>
-          <p className="text-[11px] text-gray-400 font-mono">{booking.id.slice(-8).toUpperCase()}</p>
+          <p className="text-[11px] text-gray-500 font-mono">{booking.id.slice(-8).toUpperCase()}</p>
         </div>
 
         {/* User + Room */}
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="bg-gray-50 rounded-xl p-3">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">ຜູ້ຈອງ</p>
+            <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-1">ຜູ້ຈອງ</p>
             <p className="text-[13px] font-semibold text-gray-800">{userName}</p>
-            <p className="text-[11px] text-gray-400">{booking.user.email}</p>
-            {booking.user.phone && <p className="text-[11px] text-gray-400">{booking.user.phone}</p>}
+            <p className="text-[11px] text-gray-500">{booking.user.email}</p>
+            {booking.user.phone && <p className="text-[11px] text-gray-500">{booking.user.phone}</p>}
           </div>
           <div className="bg-gray-50 rounded-xl p-3">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">ຫ້ອງ</p>
+            <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-1">ຫ້ອງ</p>
             <p className="text-[13px] font-semibold text-gray-800">{booking.room.name}</p>
-            <p className="text-[11px] text-gray-400">ຫ້ອງ {booking.room.roomNumber ?? "—"}</p>
-            <p className="text-[11px] text-gray-400">{booking.guests} ທ່ານ</p>
+            <p className="text-[11px] text-gray-500">ຫ້ອງ {booking.room.roomNumber ?? "—"}</p>
+            <p className="text-[11px] text-gray-500">{booking.guests} ທ່ານ</p>
           </div>
         </div>
 
@@ -171,15 +212,15 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
         <div className="bg-blue-50 rounded-xl p-3 mb-4">
           <div className="flex justify-between text-[12px]">
             <div>
-              <p className="text-gray-400 text-[10px]">Check-in</p>
+              <p className="text-gray-500 text-[11px]">Check-in</p>
               <p className="font-semibold text-gray-800">{checkInFmt}</p>
             </div>
             <div className="text-center">
-              <p className="text-gray-400 text-[10px]">ຈຳນວນຄືນ</p>
+              <p className="text-gray-500 text-[11px]">ຈຳນວນຄືນ</p>
               <p className="font-bold text-blue-700">{nights} ຄືນ</p>
             </div>
             <div className="text-right">
-              <p className="text-gray-400 text-[10px]">Check-out</p>
+              <p className="text-gray-500 text-[11px]">Check-out</p>
               <p className="font-semibold text-gray-800">{checkOutFmt}</p>
             </div>
           </div>
@@ -192,7 +233,7 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
         {/* Payment */}
         {tx && (
           <div className="border border-gray-100 rounded-xl p-3 mb-4">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <CreditCard size={11} /> ການຊຳລະເງິນ
             </p>
             <div className="flex items-center justify-between">
@@ -242,11 +283,116 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
           </div>
         )}
 
-        {/* Cancel Request */}
-        {booking.cancelRequest && (
-          <div className="bg-red-50 rounded-xl p-3 mb-4 text-[12px]">
-            <p className="font-semibold text-red-700 mb-1">📋 ຂໍຍົກເລີກ ({booking.cancelRequest.status})</p>
-            <p className="text-gray-600">{booking.cancelRequest.reason}</p>
+        {/* Cancel Request + Refund */}
+        {booking.cancelRequest && (() => {
+          const cr           = booking.cancelRequest
+          const refundAmount = cr.refundAmount ? Number(cr.refundAmount) : 0
+          const pendingRefund = booking.transactions.some((t) => t.type === "REFUND" && t.status === "PENDING")
+          return (
+            <div className="bg-red-50 rounded-xl p-3 mb-4 text-[12px] space-y-2.5">
+              <p className="font-semibold text-red-700">📋 ຂໍຍົກເລີກ ({cr.status})</p>
+              <p className="text-gray-600">{cr.reason}</p>
+
+              {refundAmount > 0 && (
+                <div className="bg-white rounded-lg p-2.5 border border-red-100 space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">ຍอดคืน ({cr.refundPercent ?? 0}%)</span>
+                    <span className="font-bold text-gray-800">{refundAmount.toLocaleString()} ₭</span>
+                  </div>
+                  {cr.refundBankName && (
+                    <p className="text-[11px] text-gray-500">
+                      🏦 {cr.refundBankName} · {cr.refundAccountName} · <span className="font-mono">{cr.refundAccountNumber}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* PENDING → อนุมัติ/ปฏิเสธ */}
+              {cr.status === "PENDING" && (
+                <div className="flex gap-2">
+                  <button disabled={cancelBusy} onClick={() => actOnCancel("APPROVE")}
+                    className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[11px] font-bold disabled:opacity-50">
+                    ✓ ອະนุมัติยกเลิก{refundAmount > 0 ? " + คืนเงิน" : ""}
+                  </button>
+                  <button disabled={cancelBusy} onClick={() => actOnCancel("REJECT")}
+                    className="flex-1 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-[11px] font-bold disabled:opacity-50">
+                    ✕ ປฏิเสธ
+                  </button>
+                </div>
+              )}
+
+              {/* APPROVED + ยังมี refund ค้าง → แนบสลิปโอนคืน */}
+              {cr.status === "APPROVED" && pendingRefund && (
+                <div>
+                  <input ref={refundRef} type="file" accept="image/*" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadRefundSlip(f) }} />
+                  <button disabled={cancelBusy} onClick={() => refundRef.current?.click()}
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold disabled:opacity-50">
+                    {cancelBusy ? "ກຳລັງດຳເນີນການ..." : "📤 ຢືนยันโอนคืน + แนบสลิป"}
+                  </button>
+                </div>
+              )}
+              {cr.status === "APPROVED" && !pendingRefund && refundAmount > 0 && (
+                <p className="text-[11px] text-green-600 font-semibold">✓ ໂອนเงินคืนแล้ว</p>
+              )}
+            </div>
+          )
+        })()}
+
+        {/* เอกสารยืนยันตัวตน — กรอก/ถ่ายรูปตอน check-in (booking = CONFIRMED) */}
+        {booking.status === "CONFIRMED" && (
+          <div className="border border-gray-100 rounded-xl p-3 mb-4 space-y-2.5">
+            <p className="text-[11px] text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+              <FileText size={11} /> ເອກະສານຢືນຢັນຕົວຕົນ (ຕອນ Check-in)
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <select value={docType} onChange={(e) => setDocType(e.target.value)}
+                className="border border-gray-200 rounded-lg px-2 py-2 text-[12px] text-gray-800 bg-white outline-none focus:border-blue-300">
+                <option value="">ປະເພດເອກະສານ</option>
+                <option value="ID_CARD">ບັດປະຊາຊົນ</option>
+                <option value="PASSPORT">ພາສປອດ</option>
+                <option value="OTHER">ອື່ນໆ</option>
+              </select>
+              <input value={docNumber} onChange={(e) => setDocNumber(e.target.value)} placeholder="ເລກທີ່ເອກະສານ"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-[12px] text-gray-800 bg-white outline-none focus:border-blue-300" />
+              <input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder="ສັນຊາດ"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-[12px] text-gray-800 bg-white outline-none focus:border-blue-300" />
+              <input type="date" value={docExpiry} onChange={(e) => setDocExpiry(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-[12px] text-gray-700 bg-white outline-none focus:border-blue-300" />
+            </div>
+            <input ref={docRef} type="file" accept="image/*" capture="environment" onChange={onDocFile} className="hidden" />
+            <div onClick={() => docRef.current?.click()}
+              className="border-2 border-dashed border-gray-200 rounded-lg p-3 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all">
+              {docPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={docPreview} alt="doc" className="max-h-28 rounded-lg object-contain" />
+              ) : (
+                <>
+                  <Camera size={20} className="text-gray-400 mb-1" />
+                  <p className="text-[11px] text-gray-500">ຖ່າຍຮູບ / ອັບໂຫຼດຮູບເອກະສານ</p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* เอกสารที่บันทึกไว้แล้ว (หลัง check-in) — อ่านอย่างเดียว */}
+        {booking.checkInLogs?.[0] && (booking.checkInLogs[0].docNumber || booking.checkInLogs[0].docImage) && (
+          <div className="bg-gray-50 rounded-xl p-3 mb-4 text-[12px]">
+            <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <FileText size={11} /> ເອກະສານຢືນຢັນ (Check-in)
+            </p>
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-gray-600">
+              {booking.checkInLogs[0].docType && <span>{DOC_TYPE_LABEL[booking.checkInLogs[0].docType] ?? booking.checkInLogs[0].docType}</span>}
+              {booking.checkInLogs[0].docNumber && <span className="font-mono">{booking.checkInLogs[0].docNumber}</span>}
+              {booking.checkInLogs[0].nationality && <span>{booking.checkInLogs[0].nationality}</span>}
+            </div>
+            {booking.checkInLogs[0].docImage && (
+              <a href={`/api/checkin-docs/${encodeURIComponent(booking.checkInLogs[0].docImage)}`} target="_blank" rel="noreferrer"
+                className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-blue-500 hover:underline">
+                <Eye size={11} /> ເບິ່ງຮູບເອກະສານ
+              </a>
+            )}
           </div>
         )}
 
@@ -267,21 +413,28 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
           <div className="flex gap-2">
             {TRANSITIONS[booking.status].map(({ status, label, icon: Icon }) => (
               <button key={status} disabled={!!saving}
-                onClick={() => changeStatus(status)}
+                onClick={() => {
+                  // No-show เป็นสถานะสิ้นสุด (ย้อนไม่ได้) → ยืนยันก่อน
+                  if (status === "NO_SHOW" &&
+                      !window.confirm("ໝາຍ booking ນີ້ເປັນ No-show?\nຫ້ອງຈະຖືກປ່ອຍ ແລະ ບໍ່ຄืນເງິນ (0%)")) return
+                  changeStatus(status)
+                }}
                 className={`flex-1 py-2.5 rounded-xl text-[12px] font-bold border-2 flex items-center justify-center gap-1.5
                   ${status === "CANCELLED"
                     ? "border-red-200 text-red-500 hover:bg-red-50"
+                    : status === "NO_SHOW"
+                    ? "border-orange-200 text-orange-600 hover:bg-orange-50"
                     : "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"}
                   disabled:opacity-50 transition-all`}>
                 <Icon size={13} />
-                {saving === status ? "ກຳລັງດຳເນີນການ..." : label}
+                {saving === status ? "ກຳລັງ..." : label}
               </button>
             ))}
           </div>
         )}
 
         {TRANSITIONS[booking.status].length === 0 && (
-          <p className="text-center text-[12px] text-gray-400 py-2">ການຈອງນີ້ສິ້ນສຸດແລ້ວ</p>
+          <p className="text-center text-[12px] text-gray-500 py-2">ການຈອງນີ້ສິ້ນສຸດແລ້ວ</p>
         )}
       </div>
     </div>
@@ -305,16 +458,17 @@ export default function SchedulePage() {
     if (status === "authenticated" && session?.user?.role === "USER") router.push("/profile")
   }, [status, session, router])
 
+  // ดึง booking ทั้งหมดครั้งเดียว แล้วกรองสถานะ/ค้นหาฝั่ง client
+  // เพื่อให้ตัวเลขนับของทุกแท็บถูกต้องเสมอ (ไม่ใช่แค่ตอนเลือก "ทั้งหมด")
   const fetchBookings = useCallback(async () => {
     setLoading(true)
     try {
-      const q   = filterSt !== "ALL" ? `?status=${filterSt}` : ""
-      const res = await fetch(`/api/admin/bookings${q}`)
+      const res = await fetch(`/api/admin/bookings`)
       const data = await res.json()
       setBookings(Array.isArray(data) ? data : [])
     } catch { setBookings([]) }
     finally  { setLoading(false) }
-  }, [filterSt])
+  }, [])
 
   useEffect(() => {
     if (status !== "authenticated") return
@@ -323,6 +477,7 @@ export default function SchedulePage() {
   }, [status, fetchBookings])
 
   const filtered = bookings.filter((b) => {
+    if (filterSt !== "ALL" && b.status !== filterSt) return false
     if (!search) return true
     const full = `${b.user.name ?? ""} ${b.user.lastName ?? ""} ${b.user.email} ${b.room.name}`.toLowerCase()
     return full.includes(search.toLowerCase())
@@ -335,6 +490,7 @@ export default function SchedulePage() {
     CHECKED_IN:  bookings.filter((b) => b.status === "CHECKED_IN").length,
     COMPLETED:   bookings.filter((b) => b.status === "COMPLETED").length,
     CANCELLED:   bookings.filter((b) => b.status === "CANCELLED").length,
+    NO_SHOW:     bookings.filter((b) => b.status === "NO_SHOW").length,
   }
 
   if (status === "loading") return (
@@ -345,26 +501,21 @@ export default function SchedulePage() {
 
   return (
     <div className="flex min-h-screen bg-[#F4F5F7] font-lao">
-      <Sidebar active="/schedule" role={session?.user?.role} />
+      <AdminSidebar />
 
       <main className="ml-[210px] flex-1 flex flex-col">
         <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-30">
           <h1 className="text-[14px] font-bold text-gray-900">ຈັດການການຈອງ</h1>
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] text-gray-400">{session?.user?.name}</span>
-            <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-white text-[11px] font-bold">
-              {session?.user?.name?.[0] ?? "A"}
-            </div>
-          </div>
+          <ProfileMenu />
         </header>
 
         <div className="flex-1 p-8">
           {/* Filter tabs */}
           <div className="flex flex-wrap items-center gap-2 mb-5">
-            {(["ALL","PENDING","CONFIRMED","CHECKED_IN","COMPLETED","CANCELLED"] as const).map((s) => (
+            {(["ALL","PENDING","CONFIRMED","CHECKED_IN","COMPLETED","CANCELLED","NO_SHOW"] as const).map((s) => (
               <button key={s} onClick={() => setFilterSt(s)}
                 className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors flex items-center gap-1.5
-                  ${filterSt === s ? "bg-[#1E1040] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  ${filterSt === s ? "bg-[#0B2447] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                 {s !== "ALL" && <span className={`w-1.5 h-1.5 rounded-full ${ST_CFG[s].dot}`} />}
                 {s === "ALL" ? "ທັງໝົດ" : ST_CFG[s].label}
                 <span className="opacity-60">({counts[s as keyof typeof counts] ?? bookings.length})</span>
@@ -372,7 +523,7 @@ export default function SchedulePage() {
             ))}
             <div className="ml-auto flex items-center gap-2">
               <div className="relative">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input value={search} onChange={(e) => setSearch(e.target.value)}
                   placeholder="ຄົ້ນຫາ..."
                   className="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-[12px] text-gray-700 bg-white outline-none focus:border-blue-300 w-44" />
@@ -383,63 +534,64 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          {/* Table */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="grid grid-cols-[1fr_140px_120px_120px_70px_120px_80px] gap-2 px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+          {/* Table — no overflow-hidden so the row action menu isn't clipped */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+            <div className="grid grid-cols-[1fr_140px_120px_120px_70px_120px_80px] gap-2 px-5 py-3 border-b border-gray-200 bg-gray-50/80 rounded-t-2xl">
               {["ຜູ້ຈອງ","ຫ້ອງ","Check-in","Check-out","ຄົນ","ສະຖານະ",""].map((h, i) => (
-                <p key={i} className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{h}</p>
+                <p key={i} className="text-[11px] font-bold text-gray-600 uppercase tracking-wider">{h}</p>
               ))}
             </div>
 
             {loading ? (
               <div className="py-16 flex justify-center"><Loader2 size={24} className="text-blue-400 animate-spin" /></div>
             ) : filtered.length === 0 ? (
-              <div className="py-16 text-center text-gray-300 text-[13px]">ບໍ່ມີຂໍ້ມູນ</div>
+              <div className="py-16 text-center text-gray-400 text-[13px]">ບໍ່ມີຂໍ້ມູນ</div>
             ) : (
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-gray-100">
                 {filtered.map((b) => {
                   const st       = ST_CFG[b.status]
-                  const tx       = b.transactions[0]
+                  const tx       = b.transactions.find((t) => t.type === "CHARGE") ?? b.transactions[0]
                   const userName = [b.user.name, b.user.lastName].filter(Boolean).join(" ") || b.user.email
                   const cin      = new Date(b.checkIn).toLocaleDateString("lo-LA",  { day: "2-digit", month: "short" })
                   const cout     = new Date(b.checkOut).toLocaleDateString("lo-LA", { day: "2-digit", month: "short" })
                   return (
                     <div key={b.id}
-                      className="grid grid-cols-[1fr_140px_120px_120px_70px_120px_80px] gap-2 items-center px-5 py-3.5 hover:bg-gray-50/50 transition-colors">
+                      className="grid grid-cols-[1fr_140px_120px_120px_70px_120px_80px] gap-2 items-center px-5 py-3.5 hover:bg-gray-50/50 transition-colors last:rounded-b-2xl">
                       <div>
                         <p className="text-[13px] font-medium text-gray-800 truncate">{userName}</p>
-                        <p className="text-[10px] text-gray-400 truncate">{b.user.email}</p>
+                        <p className="text-[11px] text-gray-500 truncate">{b.user.email}</p>
                         {tx && (
-                          <p className={`text-[10px] font-semibold mt-0.5 ${PAY_CFG[tx.status].color}`}>
+                          <p className={`text-[11px] font-semibold mt-0.5 ${PAY_CFG[tx.status].color}`}>
                             {PAY_CFG[tx.status].label}
                           </p>
                         )}
                       </div>
                       <div>
                         <p className="text-[12px] font-medium text-gray-700">{b.room.name}</p>
-                        <p className="text-[10px] text-gray-400">ຫ້ອງ {b.room.roomNumber ?? "—"}</p>
+                        <p className="text-[11px] text-gray-500">ຫ້ອງ {b.room.roomNumber ?? "—"}</p>
                       </div>
                       <p className="text-[12px] text-gray-600">{cin}</p>
                       <p className="text-[12px] text-gray-600">{cout}</p>
                       <p className="text-[12px] text-gray-500">{b.guests}</p>
                       <div className="flex items-center gap-1.5">
                         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${st.color}`}>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.color}`}>
                           {st.label}
                         </span>
                       </div>
                       <div className="relative flex justify-end">
                         <button onClick={() => setOpenDrop(openDrop === b.id ? null : b.id)}
-                          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700">
+                          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700">
                           <MoreHorizontal size={16} />
                         </button>
                         {openDrop === b.id && (
-                          <div className="absolute right-0 mt-1 w-36 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50">
+                          <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-50">
                             <button onClick={() => { setSelected(b); setOpenDrop(null) }}
                               className="w-full text-left px-4 py-2 text-[12px] text-gray-700 hover:bg-blue-50 hover:text-blue-600 font-medium">
                               📋 ລາຍລະອຽດ
                             </button>
-                            {TRANSITIONS[b.status].map(({ status: ns, label, color }) => (
+                            {/* Check-in ต้องผ่านโมดัล (เก็บเอกสาร) → ตัดออกจาก quick-action */}
+                            {TRANSITIONS[b.status].filter(({ status: ns }) => ns !== "CHECKED_IN").map(({ status: ns, label, color }) => (
                               <button key={ns}
                                 onClick={async () => {
                                   setOpenDrop(null)
@@ -447,7 +599,6 @@ export default function SchedulePage() {
                                     method: "PATCH", headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify({
                                       status: ns,
-                                      ...(ns === "CHECKED_IN"  ? { actualCheckIn:  new Date().toISOString() } : {}),
                                       ...(ns === "CHECKED_OUT" ? { actualCheckOut: new Date().toISOString() } : {}),
                                     }),
                                   })
@@ -457,6 +608,13 @@ export default function SchedulePage() {
                                 {label}
                               </button>
                             ))}
+                            {/* ปุ่มลัดเปิดโมดัลเพื่อ Check-in พร้อมเอกสาร */}
+                            {TRANSITIONS[b.status].some(({ status: ns }) => ns === "CHECKED_IN") && (
+                              <button onClick={() => { setSelected(b); setOpenDrop(null) }}
+                                className="w-full text-left px-4 py-2 text-[12px] hover:bg-gray-50 font-medium text-purple-600">
+                                Check-in + ເອກະສານ
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

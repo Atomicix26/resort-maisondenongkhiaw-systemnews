@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { nextId } from "@/lib/ids"
 
 function parseJson<T>(value: string | null, fallback: T): T {
   if (!value) return fallback
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
 
     const roomType = await prisma.roomType.create({
       data: {
+        id: nextId("roomType"),
         typeName,
         description: body.description ? String(body.description) : null,
         basePrice,

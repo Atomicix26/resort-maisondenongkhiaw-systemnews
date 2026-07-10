@@ -19,7 +19,7 @@ export default function UnauthorizedPage() {
           <ShieldX size={38} className="text-red-500" />
         </div>
         <h1 className="text-[22px] font-bold text-gray-900 mb-2">ບໍ່ມີສິດເຂົ້າໃຊ້</h1>
-        <p className="text-gray-400 text-[13px] mb-7">ທ່ານບໍ່ມີສິດເຂົ້າໃຊ້ໜ້ານີ້</p>
+        <p className="text-gray-500 text-[13px] mb-7">ທ່ານບໍ່ມີສິດເຂົ້າໃຊ້ໜ້ານີ້</p>
         <Link href={backHref}
           className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-[13px] font-semibold transition-all">
           ກັບສູ່ໜ້າຫຼັກ

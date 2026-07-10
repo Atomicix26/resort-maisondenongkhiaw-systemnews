@@ -1,13 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { useSession, signOut } from "next-auth/react"
+import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
-import {
-  Activity, BedDouble, Clock, Crown, Loader2, LogOut,
-  Plus, RefreshCw, Search, TrendingUp, Users, X,
-} from "lucide-react"
+import { Loader2, Plus, RefreshCw, Search, X } from "lucide-react"
+import { SuperAdminSidebar } from "@/components/superadmin-sidebar"
+import { ProfileMenu } from "@/components/profile-menu"
 
 interface RoomType {
   id: string
@@ -39,47 +37,6 @@ const EMPTY_FORM: FormState = {
   images: "",
   amenities: "",
   isActive: true,
-}
-
-function Sidebar({ active }: { active: string }) {
-  const nav = [
-    { icon: Activity, label: "Dashboard", path: "/superadmin/dashboard" },
-    { icon: Users, label: "Staff", path: "/staff" },
-    { icon: BedDouble, label: "Room", path: "/booking" },
-    { icon: BedDouble, label: "Room Type", path: "/superadmin/room-types" },
-    { icon: TrendingUp, label: "Price Config", path: "/superadmin/price-config" },
-    { icon: Activity, label: "Reports", path: "/superadmin/reports" },
-    { icon: Clock, label: "Access Logs", path: "/superadmin/logs" },
-  ]
-
-  return (
-    <aside className="w-[210px] min-h-screen bg-[#120B2E] flex flex-col justify-between fixed left-0 top-0 z-40">
-      <div>
-        <div className="px-6 py-5 border-b border-white/10">
-          <div className="flex items-center gap-2 mb-0.5">
-            <Crown size={14} className="text-yellow-400" />
-            <p className="text-white/50 text-[10px] uppercase tracking-wider">SuperAdmin</p>
-          </div>
-          <p className="text-white font-bold text-[14px]">Resort MDNK1</p>
-        </div>
-        <nav className="mt-3 px-3 space-y-0.5">
-          {nav.map(({ icon: Icon, label, path }) => (
-            <Link key={path} href={path}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[12px] font-medium transition-all
-                ${active === path
-                  ? "bg-white/10 text-white border-l-[3px] border-yellow-400"
-                  : "text-white/60 hover:text-white hover:bg-white/5"}`}>
-              <Icon size={15} className="shrink-0" /> {label}
-            </Link>
-          ))}
-        </nav>
-      </div>
-      <button onClick={() => signOut({ callbackUrl: "/login" })}
-        className="flex items-center gap-2 px-6 py-5 text-white/50 hover:text-white text-[12px] transition-colors border-t border-white/10">
-        <LogOut size={14} /> Logout
-      </button>
-    </aside>
-  )
 }
 
 function RoomTypeModal({
@@ -148,43 +105,43 @@ function RoomTypeModal({
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-7 relative">
-        <button onClick={onClose} className="absolute top-5 right-5 text-gray-300 hover:text-gray-600"><X size={18} /></button>
+        <button onClick={onClose} className="absolute top-5 right-5 text-gray-400 hover:text-gray-600"><X size={18} /></button>
         <h2 className="text-[16px] font-bold text-gray-900 mb-5">{mode === "add" ? "Add Room Type" : "Edit Room Type"}</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="text-[11px] text-gray-600 font-semibold">Type Name *</label>
             <input value={form.typeName} onChange={(event) => set("typeName", event.target.value)}
-              className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-purple-400" />
+              className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[11px] text-gray-600 font-semibold">Base Price *</label>
               <input type="number" value={form.basePrice} onChange={(event) => set("basePrice", event.target.value)}
-                className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-purple-400" />
+                className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
             </div>
             <div>
               <label className="text-[11px] text-gray-600 font-semibold">Max Guests *</label>
               <input type="number" value={form.maxGuests} onChange={(event) => set("maxGuests", event.target.value)}
-                className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-purple-400" />
+                className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
             </div>
           </div>
           <div>
             <label className="text-[11px] text-gray-600 font-semibold">Images (URL)</label>
             <input value={form.images} onChange={(event) => set("images", event.target.value)}
               placeholder="https://... , https://..."
-              className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-purple-400" />
-            <p className="mt-1 text-[10px] text-gray-400">ໃສ່ URL ຮູບພາບ, ຄັ່ນດ້ວຍ comma (,)</p>
+              className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
+            <p className="mt-1 text-[11px] text-gray-500">ໃສ່ URL ຮູບພາບ, ຄັ່ນດ້ວຍ comma (,)</p>
           </div>
           <div>
             <label className="text-[11px] text-gray-600 font-semibold">Amenities</label>
             <input value={form.amenities} onChange={(event) => set("amenities", event.target.value)}
               placeholder="Wifi, Pool, Breakfast"
-              className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-purple-400" />
+              className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
           </div>
           <div>
             <label className="text-[11px] text-gray-600 font-semibold">Description</label>
             <textarea value={form.description} onChange={(event) => set("description", event.target.value)} rows={3}
-              className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-purple-400 resize-none" />
+              className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400 resize-none" />
           </div>
           <label className="flex items-center gap-2 text-[12px] text-gray-600">
             <input type="checkbox" checked={form.isActive} onChange={(event) => set("isActive", event.target.checked)} />
@@ -195,7 +152,7 @@ function RoomTypeModal({
             <button type="button" onClick={onClose}
               className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-600 hover:bg-gray-50">Cancel</button>
             <button type="submit" disabled={saving}
-              className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[13px] font-semibold disabled:opacity-50">
+              className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[13px] font-semibold disabled:opacity-50">
               {saving ? "Saving..." : "Save"}
             </button>
           </div>
@@ -254,32 +211,33 @@ export default function RoomTypesPage() {
   })
 
   if (status === "loading") {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-purple-500" /></div>
+    return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-blue-500" /></div>
   }
 
   return (
     <div className="flex min-h-screen bg-[#F4F5F7] font-lao">
-      <Sidebar active="/superadmin/room-types" />
+      <SuperAdminSidebar />
       <main className="ml-[210px] flex-1 p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-[20px] font-bold text-gray-900">Room Type</h1>
-            <p className="text-[12px] text-gray-400 mt-1">Manage room categories and base pricing.</p>
+            <p className="text-[12px] text-gray-500 mt-1">Manage room categories and base pricing.</p>
           </div>
           <div className="flex gap-2">
             <button onClick={fetchItems} className="p-2 bg-white border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50"><RefreshCw size={14} /></button>
             <button onClick={() => setModal({ mode: "add" })}
-              className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-[12px] font-semibold">
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-[12px] font-semibold">
               <Plus size={13} /> Add Type
             </button>
+            <ProfileMenu />
           </div>
         </div>
 
         <div className="relative mb-4 max-w-xs">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input value={search} onChange={(event) => setSearch(event.target.value)}
             placeholder="Search type..."
-            className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-[12px] text-gray-700 outline-none focus:border-purple-300" />
+            className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-[12px] text-gray-700 outline-none focus:border-blue-300" />
         </div>
 
         {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-[12px] text-red-600">{error}</p>}
@@ -287,25 +245,25 @@ export default function RoomTypesPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="grid grid-cols-[1fr_120px_100px_100px_100px_120px] gap-3 px-5 py-3 border-b border-gray-100 bg-gray-50/60">
             {["Type", "Base Price", "Guests", "Rooms", "Status", ""].map((head) => (
-              <p key={head} className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{head}</p>
+              <p key={head} className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{head}</p>
             ))}
           </div>
           {loading ? (
-            <div className="py-16 flex justify-center"><Loader2 size={24} className="text-purple-400 animate-spin" /></div>
+            <div className="py-16 flex justify-center"><Loader2 size={24} className="text-blue-400 animate-spin" /></div>
           ) : filtered.length === 0 ? (
-            <div className="py-16 text-center text-gray-300 text-[13px]">No room types found</div>
+            <div className="py-16 text-center text-gray-400 text-[13px]">No room types found</div>
           ) : (
             <div className="divide-y divide-gray-50">
               {filtered.map((item) => (
                 <div key={item.id} className="grid grid-cols-[1fr_120px_100px_100px_100px_120px] gap-3 items-center px-5 py-3.5 hover:bg-gray-50/50">
                   <div>
                     <p className="text-[13px] font-medium text-gray-800">{item.typeName}</p>
-                    <p className="text-[10px] text-gray-400 truncate">{item.amenities.join(", ") || item.description || "-"}</p>
+                    <p className="text-[11px] text-gray-500 truncate">{item.amenities.join(", ") || item.description || "-"}</p>
                   </div>
                   <p className="text-[12px] font-mono text-gray-700">{item.basePrice.toLocaleString()}</p>
                   <p className="text-[12px] text-gray-500">{item.maxGuests}</p>
                   <p className="text-[12px] text-gray-500">{item._count.rooms}</p>
-                  <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                  <span className={`w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                     {item.isActive ? "Active" : "Inactive"}
                   </span>
                   <div className="flex justify-end gap-2">

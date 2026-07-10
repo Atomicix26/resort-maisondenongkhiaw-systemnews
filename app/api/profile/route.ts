@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma"
 // GET — ดึงข้อมูล profile ของ user ที่ login อยู่
 export async function GET() {
   const session = await getServerSession(authOptions)
-  if (!session) {
+  if (!session?.user?.id) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
   }
 
@@ -30,7 +30,7 @@ export async function GET() {
 // PATCH — แก้ไขข้อมูล profile
 export async function PATCH(request: Request) {
   const session = await getServerSession(authOptions)
-  if (!session) {
+  if (!session?.user?.id) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
   }
 

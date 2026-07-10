@@ -33,7 +33,6 @@ export default function LoginPage() {
       return
     }
 
-    // ดึง session เพื่อรู้ role แล้ว redirect ไปถูกที่
     const session = await getSession()
     const role    = session?.user?.role ?? "USER"
     router.push(getRedirectByRole(role))
@@ -42,17 +41,15 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen w-full flex items-center justify-center relative font-lao">
 
-      {/* Background */}
       <div className="absolute inset-0 z-0">
         <Image src="/pic.png" alt="Background" fill sizes="100vw" className="object-cover" priority />
         <div className="absolute inset-0 bg-black/40 backdrop-blur-md" />
       </div>
 
-      {/* Card */}
       <div className="relative z-10 bg-[#1a1a1a] text-white w-full max-w-[400px] p-10 py-16 rounded-[45px] shadow-2xl border border-white/5 text-center">
 
         <h1 className="text-4xl font-bold mb-2">ເຂົ້າສູ່ລະບົບ</h1>
-        <p className="text-gray-400 text-sm mb-10">ກະລຸນາປ້ອນຂໍ້ມູນ</p>
+        <p className="text-gray-500 text-sm mb-10">ກະລຸນາປ້ອນຂໍ້ມູນ</p>
 
         <form onSubmit={handleLogin} className="space-y-8">
           <input
@@ -65,15 +62,22 @@ export default function LoginPage() {
             required
           />
 
-          <input
-            type="password"
-            placeholder="Password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-transparent border-b border-gray-600 py-2 focus:outline-none text-sm"
-            required
-          />
+          <div>
+            <input
+              type="password"
+              placeholder="Password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-transparent border-b border-gray-600 py-2 focus:outline-none text-sm"
+              required
+            />
+            <div className="text-right mt-2">
+              <Link href="/forgot-password" className="text-gray-500 text-xs hover:text-white transition-colors">
+                ລືມລະຫັດຜ່ານ?
+              </Link>
+            </div>
+          </div>
 
           {error && (
             <p className="text-red-400 text-sm -mt-4">{error}</p>
