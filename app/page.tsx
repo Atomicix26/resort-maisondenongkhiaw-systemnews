@@ -6,6 +6,8 @@ import Link  from "next/link"
 import { useRouter } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useLanguage } from "@/components/language-provider"
+import { RoomSelect } from "@/components/room-select"
+import { getRedirectByRole } from "@/lib/routes"
 import {
   Search, Bed, Users, Eye, LogOut,
   User, ChevronDown, Wifi, Wind, Star,
@@ -120,7 +122,7 @@ export default function Home() {
                 {(session.user.role === "ADMIN" || session.user.role === "SUPERADMIN") && (
                   <>
                     <div className="h-px bg-gray-100 mx-3 my-1" />
-                    <Link href="/admin/dashboard" className="flex items-center gap-2 px-4 py-2 text-[12px] text-purple-600 hover:bg-purple-50">
+                    <Link href={getRedirectByRole(session.user.role)} className="flex items-center gap-2 px-4 py-2 text-[12px] text-blue-600 hover:bg-blue-50">
                       <Star size={12} /> {t("adminPanel")}
                     </Link>
                   </>
@@ -153,67 +155,56 @@ export default function Home() {
         <div className="relative z-20 container mx-auto px-8 mt-6">
           <p className="text-[13px] text-white/70 mb-2 uppercase tracking-widest">{t("heroKicker")}</p>
           <h1 className="text-4xl font-bold leading-tight drop-shadow-lg">
-            Resort Mai Son De <br /> Nong Khiw
+            Resort Maison <br /> De Nongkhiaw
           </h1>
         </div>
 
         {/* ── Search Bar ──────────────────────────────────────── */}
-        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-4">
-          <div className="bg-white rounded-xl shadow-lg p-3 flex flex-wrap items-end gap-3 text-gray-700 border border-gray-100">
+        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 z-30 w-full max-w-4xl px-4">
+          <div className="bg-white rounded-2xl shadow-xl p-4 flex flex-wrap items-end gap-4 border border-gray-100">
 
             {/* เลือกห้อง */}
-            <div className="flex-1 min-w-[140px]">
-              <p className="text-[9px] font-semibold text-gray-400 mb-1 uppercase tracking-wider">{t("bookingLabel")}</p>
-              <select
-                value={selectedRoom}
-                onChange={(e) => setSelectedRoom(e.target.value)}
-                className="w-full border-b border-gray-200 py-1 text-[12px] bg-transparent outline-none cursor-pointer text-gray-700"
-              >
-                <option value="">{t("selectRoom")}</option>
-                {rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name} — {r.price.toLocaleString()} ₭
-                  </option>
-                ))}
-              </select>
+            <div className="flex-[1.5] min-w-[170px]">
+              <p className="text-[11px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">{t("bookingLabel")}</p>
+              <RoomSelect rooms={rooms} value={selectedRoom} onChange={setSelectedRoom} placeholder={t("selectRoom")} />
             </div>
 
             {/* Check-in */}
-            <div className="flex-1 min-w-[110px]">
-              <p className="text-[9px] text-gray-400 mb-1 uppercase tracking-wider">{t("checkIn")}</p>
+            <div className="flex-1 min-w-[120px]">
+              <p className="text-[11px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">{t("checkIn")}</p>
               <input
                 type="date" min={today} value={checkIn}
                 onChange={(e) => setCheckIn(e.target.value)}
-                className="w-full border-b border-gray-200 py-1 text-[12px] outline-none"
+                className="w-full border-b border-gray-300 pb-1.5 text-[13px] text-gray-900 outline-none focus:border-blue-500"
               />
             </div>
 
             {/* Check-out */}
-            <div className="flex-1 min-w-[110px]">
-              <p className="text-[9px] text-gray-400 mb-1 uppercase tracking-wider">{t("checkOut")}</p>
+            <div className="flex-1 min-w-[120px]">
+              <p className="text-[11px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">{t("checkOut")}</p>
               <input
                 type="date" min={checkIn || today} value={checkOut}
                 onChange={(e) => setCheckOut(e.target.value)}
-                className="w-full border-b border-gray-200 py-1 text-[12px] outline-none"
+                className="w-full border-b border-gray-300 pb-1.5 text-[13px] text-gray-900 outline-none focus:border-blue-500"
               />
             </div>
 
             {/* ปุ่มจอง */}
             <button
               onClick={handleBook}
-              className="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-5 py-2 rounded-lg text-[12px] font-semibold transition-all"
+              className="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-6 py-2.5 rounded-lg text-[13px] font-semibold transition-all shadow-sm"
             >
               {t("bookNow")}
             </button>
 
             {/* Search */}
-            <div className="relative flex-1 min-w-[130px]">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={12} />
+            <div className="relative flex-1 min-w-[140px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" size={13} />
               <input
                 type="text" placeholder={t("searchPlaceholder")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full py-2 pl-7 pr-3 border border-gray-200 rounded-lg bg-gray-50 text-[12px] outline-none focus:border-blue-300"
+                className="w-full py-2.5 pl-8 pr-3 border border-gray-200 rounded-lg bg-gray-50 text-[13px] text-gray-900 placeholder:text-gray-500 outline-none focus:border-blue-400 focus:bg-white"
               />
             </div>
           </div>
@@ -226,7 +217,7 @@ export default function Home() {
           <div className="w-1 h-6 bg-blue-600 rounded-full" />
           <h2 className="text-xl font-bold text-gray-900">{t("roomsTitle")}</h2>
           {!loading && (
-            <span className="text-[11px] text-gray-400 ml-1">
+            <span className="text-[11px] text-gray-500 ml-1">
               ({rooms.length} {t("roomsCountSuffix")})
             </span>
           )}
@@ -249,7 +240,7 @@ export default function Home() {
 
         {/* No results */}
         {!loading && rooms.length === 0 && (
-          <div className="text-center py-20 text-gray-400">
+          <div className="text-center py-20 text-gray-500">
             <Bed size={40} className="mx-auto mb-3 opacity-30" />
             <p className="text-[14px]">{t("noRooms")}</p>
           </div>
@@ -285,32 +276,34 @@ export default function Home() {
                 {/* Body */}
                 <div className="p-4">
                   <h3 className="text-[13px] font-bold text-gray-900 truncate">{room.name}</h3>
-                  <p className="text-[11px] text-gray-400 mt-0.5 truncate">{room.view}</p>
+                  <p className="text-[12px] text-gray-500 mt-0.5 truncate">{room.view}</p>
 
                   {/* Info row */}
-                  <div className="flex items-center gap-3 mt-2.5 text-[11px] text-gray-500">
+                  <div className="flex items-center gap-3.5 mt-2.5 text-[12px] font-medium text-gray-600">
                     <span className="flex items-center gap-1">
-                      <Bed   size={11} /> {room.bedType}
+                      <Bed   size={13} className="text-gray-500" /> {room.bedType}
                     </span>
                     <span className="flex items-center gap-1">
-                      <Users size={11} /> {room.capacity} {t("people")}
+                      <Users size={13} className="text-gray-500" /> {room.capacity} {t("people")}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Eye  size={11} /> {room.size} m²
-                    </span>
+                    {room.size != null && (
+                      <span className="flex items-center gap-1">
+                        <Eye  size={13} className="text-gray-500" /> {room.size} m²
+                      </span>
+                    )}
                   </div>
 
                   {/* Amenities pills (max 3) */}
                   {room.amenities.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2.5">
+                    <div className="flex flex-wrap gap-1.5 mt-3">
                       {room.amenities.slice(0, 3).map((a) => (
-                        <span key={a} className="flex items-center gap-0.5 text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
-                          {a.toLowerCase().includes("wifi") ? <Wifi size={8} /> : <Wind size={8} />}
+                        <span key={a} className="flex items-center gap-1 text-[11px] font-medium bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
+                          {a.toLowerCase().includes("wifi") ? <Wifi size={10} /> : <Wind size={10} />}
                           {a}
                         </span>
                       ))}
                       {room.amenities.length > 3 && (
-                        <span className="text-[9px] text-gray-400 px-1.5 py-0.5">
+                        <span className="text-[11px] font-medium text-gray-500 px-1.5 py-0.5">
                           +{room.amenities.length - 3}
                         </span>
                       )}
@@ -323,7 +316,7 @@ export default function Home() {
                       setSelectedRoom(room.id)
                       window.scrollTo({ top: 0, behavior: "smooth" })
                     }}
-                    className="w-full mt-3.5 py-2 border border-gray-200 rounded-lg text-[11px] font-semibold text-gray-700 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all active:scale-95"
+                    className="w-full mt-4 py-2.5 border-2 border-gray-800 rounded-lg text-[12px] font-bold text-gray-800 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all active:scale-95"
                   >
                     {t("chooseThisRoom")}
                   </button>

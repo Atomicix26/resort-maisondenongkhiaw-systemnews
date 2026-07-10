@@ -5,6 +5,8 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { getStayPricing } from "@/lib/pricing"
 import { checkRateLimit, getIP, RATE_LIMITS, MAX_PENDING_BOOKINGS } from "@/lib/ratelimit"
+import { expireStaleBookings, paymentDeadline } from "@/lib/expire"
+import { nextId } from "@/lib/ids"
 
 // ── ตรวจว่า error เกิดจาก serialization/deadlock (ควร retry) ──────────
 // P2034 = Prisma: transaction failed due to write conflict or deadlock
@@ -42,7 +44,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Invalid body" }, { status: 400 })
   }
 
-  const { roomId, checkIn, checkOut, guests, specialRequest, guestIdCard } = body
+  const { roomId, checkIn, checkOut, guests, specialRequest } = body
 
   if (!roomId || !checkIn || !checkOut || !guests) {
     return NextResponse.json({ message: "ຂໍ້ມູນບໍ່ຄົບ" }, { status: 400 })
@@ -106,7 +108,7 @@ export async function POST(request: NextRequest) {
           const conflict = await tx.booking.findFirst({
             where: {
               roomId,
-              status:    { notIn: ["CANCELLED"] },
+              status:    { notIn: ["CANCELLED", "NO_SHOW"] },
               checkIn:   { lt: checkOutDate },
               checkOut:  { gt: checkInDate  },
               deletedAt: null,
@@ -117,8 +119,14 @@ export async function POST(request: NextRequest) {
           }
 
           // กันยึดห้องด้วย booking ที่ยัง PENDING (ยังไม่จ่าย) เกินกำหนด (BUG-016)
+          // นับเฉพาะ PENDING ที่ยังไม่หมดเวลาชำระ — ที่หมดเวลาแล้วถือว่าจะถูกยกเลิก
           const pendingCount = await tx.booking.count({
-            where: { userId: session.user.id, status: "PENDING", deletedAt: null },
+            where: {
+              userId:    session.user.id,
+              status:    "PENDING",
+              deletedAt: null,
+              OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }],
+            },
           })
           if (pendingCount >= MAX_PENDING_BOOKINGS) {
             throw new Error("TOO_MANY_PENDING")
@@ -127,6 +135,7 @@ export async function POST(request: NextRequest) {
           // 2. สร้าง Booking ด้วยราคาที่คำนวณจาก server
           const booking = await tx.booking.create({
             data: {
+              id:             nextId("booking"),
               userId:         session.user.id,
               roomId,
               checkIn:        checkInDate,
@@ -135,7 +144,7 @@ export async function POST(request: NextRequest) {
               totalPrice,
               status:         "PENDING",
               specialRequest: specialRequest ?? null,
-              guestIdCard:    guestIdCard?.trim() || null,
+              expiresAt:      paymentDeadline(), // ໝົດເວລາຊຳລະ +10 ນາທີ (BUG: auto-cancel)
             },
             include: {
               room: { select: { name: true, price: true, view: true } },
@@ -144,6 +153,7 @@ export async function POST(request: NextRequest) {
 
           const transaction = await tx.paymentTransaction.create({
             data: {
+              id:        nextId("paymentTransaction"),
               bookingId: booking.id,
               type:      "CHARGE",
               amount:    totalPrice,            // ✅ server-calculated
@@ -189,7 +199,7 @@ export async function POST(request: NextRequest) {
     }
     if (error instanceof Error && error.message === "TOO_MANY_PENDING") {
       return NextResponse.json(
-        { message: `Too many unpaid (PENDING) bookings — max ${MAX_PENDING_BOOKINGS}. Please pay or cancel an existing one first.` },
+        { message: `ທ່ານມີການຈອງທີ່ຍັງບໍ່ໄດ້ຊຳລະຢູ່ແລ້ວ — ກະລຸນາຊຳລະ ຫຼື ຍົກເລີກໃຫ້ແລ້ວກ່ອນຈອງເພີ່ມ (ສູງສຸດ ${MAX_PENDING_BOOKINGS} ລາຍການ)` },
         { status: 409 }
       )
     }
@@ -206,6 +216,9 @@ export async function GET() {
   }
 
   try {
+    // ยกเลิก booking ที่หมดเวลาชำระก่อน เพื่อให้ลูกค้าเห็นสถานะล่าสุด
+    await expireStaleBookings()
+
     const bookings = await prisma.booking.findMany({
       where:   { userId: session.user.id, deletedAt: null },
       include: {
@@ -214,24 +227,33 @@ export async function GET() {
         },
         transactions: {
           orderBy: { createdAt: "desc" },
-          take: 1,
+          take: 5, // CHARGE + อาจมี REFUND — เอามาแสดงในประวัติการชำระ
         },
         review: {
           select: { id: true, rating: true, comment: true, createdAt: true },
+        },
+        // คำขอยกเลิกที่ค้างอยู่ → ให้หน้าประวัติแสดงสถานะ + เงินคืนได้
+        cancelRequest: {
+          select: { id: true, status: true, reason: true, refundable: true, requestDate: true },
         },
       },
       orderBy: { createdAt: "desc" },
     })
 
-    const parsed = bookings.map((b) => ({
-      ...b,
-      totalPrice:    Number(b.totalPrice),
-      room:          { ...b.room, images: safeJson(b.room.images, []) },
-      paymentStatus: b.transactions[0]?.status ?? "PENDING",
-      paymentMethod: b.transactions[0]?.method ?? null,
-      paymentAmount: b.transactions[0] ? Number(b.transactions[0].amount) : null,
-      review:        b.review,
-    }))
+    const parsed = bookings.map((b) => {
+      // สถานะการชำระอ้างอิงจาก CHARGE เท่านั้น (ไม่ใช่ REFUND ที่อาจใหม่กว่า)
+      const charge = b.transactions.find((t) => t.type === "CHARGE")
+      return {
+        ...b,
+        totalPrice:    Number(b.totalPrice),
+        room:          { ...b.room, images: safeJson(b.room.images, []) },
+        paymentStatus: charge?.status ?? "PENDING",
+        paymentMethod: charge?.method ?? null,
+        paymentAmount: charge ? Number(charge.amount) : null,
+        review:        b.review,
+        cancelRequest: b.cancelRequest,
+      }
+    })
 
     return NextResponse.json({ bookings: parsed })
 

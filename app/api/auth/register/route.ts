@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { checkRateLimit, getIP, RATE_LIMITS } from "@/lib/ratelimit"
+import { nextId } from "@/lib/ids"
 
 export async function POST(request: Request) {
 
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
 
     const hashed = await bcrypt.hash(password, 10)
     await prisma.user.create({
-      data: { name, lastName, phone, email, password: hashed, role: "USER" },
+      data: { id: nextId("user"), name, lastName, phone, email, password: hashed, role: "USER" },
     })
 
     return NextResponse.json({ message: "ສະໝັກສຳເລັດ" }, { status: 201 })

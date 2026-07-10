@@ -27,12 +27,12 @@ export function SuperAdminSidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="w-[210px] min-h-screen bg-[#120B2E] flex flex-col justify-between fixed left-0 top-0 z-40">
+    <aside className="w-[210px] min-h-screen bg-[#071A33] flex flex-col justify-between fixed left-0 top-0 z-40">
       <div>
         <div className="px-6 py-5 border-b border-white/10">
           <div className="flex items-center gap-2 mb-0.5">
-            <Crown size={14} className="text-yellow-400" />
-            <p className="text-white/50 text-[10px] uppercase tracking-wider">SuperAdmin</p>
+            <Crown size={14} className="text-amber-400" />
+            <p className="text-white/60 text-[11px] uppercase tracking-wider">SuperAdmin</p>
           </div>
           <p className="text-white font-bold text-[14px]">Resort MDNK1</p>
         </div>
@@ -43,8 +43,8 @@ export function SuperAdminSidebar() {
               <Link key={path} href={path}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[12px] font-medium transition-all
                   ${active
-                    ? "bg-white/10 text-white border-l-[3px] border-yellow-400"
-                    : "text-white/60 hover:text-white hover:bg-white/5"}`}>
+                    ? "bg-white/10 text-white border-l-[3px] border-amber-400"
+                    : "text-white/70 hover:text-white hover:bg-white/5"}`}>
                 <Icon size={15} className="shrink-0" /> {label}
               </Link>
             )
@@ -52,7 +52,7 @@ export function SuperAdminSidebar() {
         </nav>
       </div>
       <button onClick={() => signOut({ callbackUrl: "/login" })}
-        className="flex items-center gap-2 px-6 py-5 text-white/50 hover:text-white text-[12px] transition-colors border-t border-white/10">
+        className="flex items-center gap-2 px-6 py-5 text-white/60 hover:text-white text-[12px] transition-colors border-t border-white/10">
         <LogOut size={14} /> ອອກຈາກລະບົບ
       </button>
     </aside>

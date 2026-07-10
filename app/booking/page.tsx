@@ -1,14 +1,13 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { useSession, signOut } from "next-auth/react"
+import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import {
-  BedDouble, CalendarCheck2, CalendarDays, Star, LogOut,
-  LayoutDashboard, Plus, X, MoreHorizontal,
+  Plus, X, MoreHorizontal,
   ArrowUpDown, Loader2, RefreshCw, Search,
 } from "lucide-react"
+import { SuperAdminSidebar } from "@/components/superadmin-sidebar"
 
 // ── Types ────────────────────────────────────────────────────────
 type RoomStatus = "AVAILABLE" | "OCCUPIED" | "MAINTENANCE" | "RESERVED"
@@ -40,42 +39,6 @@ const STATUS_CFG: Record<RoomStatus, { label: string; color: string; dot: string
   OCCUPIED:    { label: "ມີຜູ້ພັກ",  color: "bg-blue-100 text-blue-700",    dot: "bg-blue-500"   },
   MAINTENANCE: { label: "ສ້ອມແປງ",   color: "bg-orange-100 text-orange-700",dot: "bg-orange-500" },
   RESERVED:    { label: "ຈອງໄວ້",   color: "bg-purple-100 text-purple-700",dot: "bg-purple-500" },
-}
-
-// ── Sidebar (shared) ─────────────────────────────────────────────
-function Sidebar({ active }: { active: string }) {
-  return (
-    <aside className="w-[210px] min-h-screen bg-[#1E1040] flex flex-col justify-between fixed left-0 top-0 z-40">
-      <div>
-        <div className="px-6 py-5 border-b border-white/10">
-          <p className="text-white/50 text-[10px] uppercase tracking-wider">Admin Panel</p>
-          <p className="text-white font-bold text-[14px] mt-0.5">Resort MDNK1</p>
-        </div>
-        <nav className="mt-3 px-3 space-y-0.5">
-          {[
-            { icon: LayoutDashboard, label: "Dashboard",         path: "/admin/dashboard" },
-            { icon: BedDouble,       label: "ຈັດການຫ້ອງ",       path: "/booking"         },
-            { icon: CalendarCheck2,  label: "ຈັດການພະນັກງານ",   path: "/staff"           },
-            { icon: CalendarDays,    label: "ຈັດການການຈອງ",     path: "/schedule"        },
-            { icon: Star,            label: "ຈັດການລີວິວ",      path: "/review"          },
-          ].map(({ icon: Icon, label, path }) => (
-            <Link key={path} href={path}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[12px] font-medium transition-all
-                ${active === path
-                  ? "bg-white/10 text-white border-l-[3px] border-pink-400"
-                  : "text-white/60 hover:text-white hover:bg-white/5"}`}>
-              <Icon size={15} className="shrink-0" /> {label}
-            </Link>
-          ))}
-        </nav>
-      </div>
-      <button
-        onClick={() => signOut({ callbackUrl: "/login" })}
-        className="flex items-center gap-2 px-6 py-5 text-white/50 hover:text-white text-[12px] transition-colors border-t border-white/10">
-        <LogOut size={14} /> ອອກຈາກລະບົບ
-      </button>
-    </aside>
-  )
 }
 
 // ── Form Modal ───────────────────────────────────────────────────
@@ -134,7 +97,7 @@ function RoomModal({
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-7 relative max-h-[90vh] overflow-y-auto">
-        <button onClick={onClose} className="absolute top-5 right-5 text-gray-300 hover:text-gray-600"><X size={18} /></button>
+        <button onClick={onClose} className="absolute top-5 right-5 text-gray-400 hover:text-gray-600"><X size={18} /></button>
         <h2 className="text-[16px] font-bold text-gray-900 mb-5">
           {mode === "add" ? "➕ ເພີ່ມຫ້ອງໃໝ່" : "✏️ ແກ້ໄຂຂໍ້ມູນຫ້ອງ"}
         </h2>
@@ -208,7 +171,9 @@ export default function BookingAdminPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") { router.push("/login"); return }
-    if (status === "authenticated" && session?.user?.role === "USER") router.push("/profile")
+    // Room CRUD/pricing is not an Admin task — Admin only manages room *status*
+    // (/admin/room-status). Restrict this page to SUPERADMIN.
+    if (status === "authenticated" && session?.user?.role !== "SUPERADMIN") router.push("/unauthorized")
   }, [status, session, router])
 
   const fetchRooms = useCallback(async () => {
@@ -273,14 +238,14 @@ export default function BookingAdminPage() {
 
   return (
     <div className="flex min-h-screen bg-[#F4F5F7] font-lao">
-      <Sidebar active="/booking" />
+      <SuperAdminSidebar />
 
       <main className="ml-[210px] flex-1 flex flex-col">
         {/* Header */}
         <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-30">
           <h1 className="text-[14px] font-bold text-gray-900">ຈັດການຂໍ້ມູນຫ້ອງ</h1>
           <div className="flex items-center gap-2">
-            <span className="text-[12px] text-gray-400">{session?.user?.name}</span>
+            <span className="text-[12px] text-gray-500">{session?.user?.name}</span>
             <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[11px] font-bold">
               {session?.user?.name?.[0] ?? "A"}
             </div>
@@ -293,14 +258,14 @@ export default function BookingAdminPage() {
             {(["ALL", "AVAILABLE", "OCCUPIED", "MAINTENANCE", "RESERVED"] as const).map((s) => (
               <button key={s} onClick={() => setFilterSt(s)}
                 className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors
-                  ${filterSt === s ? "bg-[#1E1040] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  ${filterSt === s ? "bg-[#071A33] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                 {s === "ALL" ? "ທັງໝົດ" : STATUS_CFG[s].label}
                 <span className="ml-1.5 opacity-60">({counts[s]})</span>
               </button>
             ))}
             <div className="ml-auto flex items-center gap-2">
               <div className="relative">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input value={search} onChange={(e) => setSearch(e.target.value)}
                   placeholder="ຄົ້ນຫາຫ້ອງ..." 
                   className="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-[12px] text-gray-700 bg-white outline-none focus:border-blue-300 w-44" />
@@ -330,9 +295,9 @@ export default function BookingAdminPage() {
               ].map(({ label, key }, i) => (
                 <button key={i}
                   onClick={() => key && setSortBy(key as typeof sortBy)}
-                  className={`flex items-center gap-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider text-left
+                  className={`flex items-center gap-1 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-left
                     ${key ? "hover:text-gray-800 cursor-pointer" : "cursor-default"}`}>
-                  {label} {key && <ArrowUpDown size={9} className="text-gray-400" />}
+                  {label} {key && <ArrowUpDown size={9} className="text-gray-500" />}
                 </button>
               ))}
             </div>
@@ -343,7 +308,7 @@ export default function BookingAdminPage() {
                 <Loader2 size={24} className="text-blue-400 animate-spin" />
               </div>
             ) : filtered.length === 0 ? (
-              <div className="py-16 text-center text-gray-300 text-[13px]">ບໍ່ມີຂໍ້ມູນ</div>
+              <div className="py-16 text-center text-gray-400 text-[13px]">ບໍ່ມີຂໍ້ມູນ</div>
             ) : (
               <div className="divide-y divide-gray-50">
                 {filtered.map((room) => {
@@ -361,7 +326,7 @@ export default function BookingAdminPage() {
                       <div>
                         <p className="text-[13px] font-medium text-gray-800">{room.name}</p>
                         {room.roomType && (
-                          <p className="text-[10px] text-gray-400">{room.roomType.typeName}</p>
+                          <p className="text-[11px] text-gray-500">{room.roomType.typeName}</p>
                         )}
                       </div>
 
@@ -373,7 +338,7 @@ export default function BookingAdminPage() {
                       {/* status */}
                       <div className="flex items-center gap-1.5">
                         <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${st.color}`}>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.color}`}>
                           {st.label}
                         </span>
                       </div>
@@ -388,7 +353,7 @@ export default function BookingAdminPage() {
                       <div className="relative flex justify-end">
                         <button
                           onClick={() => setOpenDrop(openDrop === room.id ? null : room.id)}
-                          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700">
+                          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700">
                           <MoreHorizontal size={16} />
                         </button>
                         {openDrop === room.id && (
@@ -398,7 +363,7 @@ export default function BookingAdminPage() {
                               ✏️ ແກ້ໄຂ
                             </button>
                             <div className="h-px bg-gray-100 mx-3 my-1" />
-                            <p className="px-4 py-1 text-[10px] text-gray-400 uppercase tracking-wider">ປ່ຽນສະຖານະ</p>
+                            <p className="px-4 py-1 text-[11px] text-gray-500 uppercase tracking-wider">ປ່ຽນສະຖານະ</p>
                             {(Object.keys(STATUS_CFG) as RoomStatus[]).filter((s) => s !== room.status).map((s) => (
                               <button key={s} onClick={() => quickStatus(room, s)}
                                 className="w-full text-left px-4 py-2 text-[12px] text-gray-600 hover:bg-gray-50 flex items-center gap-2">

@@ -3,44 +3,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { checkRateLimit, getIP, RATE_LIMITS } from "@/lib/ratelimit"
-import { writeFile, mkdir } from "fs/promises"
-import path from "path"
-import crypto from "crypto"
-
-const MAX_FILE_SIZE = 5 * 1024 * 1024
-const EXT_MAP = {
-  "image/jpeg": "jpg",
-  "image/png":  "png",
-  "image/webp": "webp",
-  "image/heic": "heic",
-} as const
-
-// ── ตรวจชนิดไฟล์จริงจาก magic bytes — ไม่เชื่อ MIME ที่ client ส่งมา (BUG-006)
-function sniffImageType(buf: Buffer): keyof typeof EXT_MAP | null {
-  if (buf.length < 12) return null
-
-  // JPEG: FF D8 FF
-  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
-    return "image/jpeg"
-  }
-  // PNG: 89 50 4E 47 0D 0A 1A 0A
-  if (
-    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
-    buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
-  ) {
-    return "image/png"
-  }
-  // WEBP: "RIFF" .... "WEBP"
-  if (buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") {
-    return "image/webp"
-  }
-  // HEIC: กล่อง "ftyp" ที่ offset 4 + brand ที่รองรับ
-  if (buf.toString("ascii", 4, 8) === "ftyp") {
-    const HEIC_BRANDS = new Set(["heic", "heix", "hevc", "heim", "heis", "hevm", "hevs", "mif1", "msf1"])
-    if (HEIC_BRANDS.has(buf.toString("ascii", 8, 12))) return "image/heic"
-  }
-  return null
-}
+import { expireStaleBookings } from "@/lib/expire"
+import { saveImageUpload } from "@/lib/upload"
 
 // ✅ ลบ credit_card ออก + map status ให้ถูกต้อง
 const METHOD_MAP: Record<string, "TRANSFER" | "CASH"> = {
@@ -53,6 +17,9 @@ const STATUS_MAP: Record<string, "PENDING_VERIFY" | "PENDING"> = {
   transfer:     "PENDING_VERIFY",
   pay_at_hotel: "PENDING",
 }
+
+// booking ถูกยกเลิก/เปลี่ยนสถานะระหว่างที่กำลังชำระ (race กับ expiry sweep หรือ admin)
+class BookingNotPayableError extends Error {}
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -116,6 +83,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "ຊຳລະເງິນໄປແລ້ວ" }, { status: 409 })
     }
 
+    // ── booking ຕ້ອງຢູ່ສະຖານະ PENDING ເທົ່ານັ້ນຈຶ່ງຮັບຊຳລະໄດ້ ─────────────────
+    // ກັນບັນທຶກການຊຳລະໃຫ້ booking ທີ່ຖືກຍົກເລີກ/ຢືນຢັນ/ເຊັກອິນໄປແລ້ວ. auto-cancel
+    // ຕັ້ງ status=CANCELLED ໂດຍ CHARGE tx ກາຍເປັນ FAILED (ບໍ່ແມ່ນ PAID/PENDING_VERIFY)
+    // ຈຶ່ງຜ່ານການກວດ tx ຂ້າງເທິງ — ຕ້ອງກັນຢູ່ຊັ້ນ booking.status ນຳ.
+    if (booking.status !== "PENDING") {
+      const message =
+        booking.status === "CANCELLED"
+          ? "ໝົດເວລາຊຳລະ ຫຼື ການຈອງຖືກຍົກເລີກແລ້ວ ກະລຸນາຈອງໃໝ່"
+          : "ການຈອງນີ້ບໍ່ຢູ່ໃນສະຖານະທີ່ຊຳລະໄດ້"
+      return NextResponse.json({ message }, { status: 409 })
+    }
+
+    // ── ໝົດເວລາຊຳລະ (10 ນາທີ) ແຕ່ຍັງບໍ່ຖືກກວາດ → ຍົກເລີກ + ປະຕິເສດ ───────────
+    if (booking.expiresAt && booking.expiresAt < new Date()) {
+      await expireStaleBookings()
+      return NextResponse.json(
+        { message: "ໝົດເວລາຊຳລະ — ການຈອງນີ້ຖືກຍົກເລີກແລ້ວ ກະລຸນາຈອງໃໝ່" },
+        { status: 409 }
+      )
+    }
+
     let slipFileName: string | null = null
 
     // ── Bank Transfer: ต้องมีสลิป ──────────────────────────────
@@ -123,43 +111,42 @@ export async function POST(request: NextRequest) {
       if (!slipFile) {
         return NextResponse.json({ message: "ກະລຸນາອັບໂຫຼດສລິບ" }, { status: 400 })
       }
-      if (slipFile.size > MAX_FILE_SIZE) {
-        return NextResponse.json({ message: "ຂະໜາດໄຟລ໌ຕ້ອງບໍ່ເກີນ 5MB" }, { status: 400 })
+      const saved = await saveImageUpload(slipFile, "payment-slips", "slip")
+      if (!saved.ok) {
+        return NextResponse.json({ message: saved.error }, { status: 400 })
       }
-
-      const bytes  = await slipFile.arrayBuffer()
-      const buffer = Buffer.from(bytes)
-
-      // ตรวจขนาดจริงซ้ำจาก buffer (size จาก client เชื่อ 100% ไม่ได้)
-      if (buffer.byteLength > MAX_FILE_SIZE) {
-        return NextResponse.json({ message: "ຂະໜາດໄຟລ໌ຕ້ອງບໍ່ເກີນ 5MB" }, { status: 400 })
-      }
-
-      // ✅ ตรวจชนิดไฟล์จริงจาก magic bytes แทนการเชื่อ slipFile.type (BUG-006)
-      const detectedMime = sniffImageType(buffer)
-      if (!detectedMime) {
-        return NextResponse.json({ message: "ຮອງຮັບສະເພາະຮູບ JPG, PNG, WEBP, HEIC" }, { status: 400 })
-      }
-
-      const ext       = EXT_MAP[detectedMime]
-      const randomHex = crypto.randomBytes(16).toString("hex")
-      slipFileName    = `slip_${randomHex}.${ext}`
-
-      const uploadDir = path.join(process.cwd(), "private", "uploads", "payment-slips")
-      await mkdir(uploadDir, { recursive: true })
-      await writeFile(path.join(uploadDir, slipFileName), buffer)
+      slipFileName = saved.filename
     }
 
     // ── Pay at Hotel: ไม่ต้องมีสลิป ────────────────────────────
-    const updated = await prisma.paymentTransaction.update({
-      where: { id: pendingTx.id },
-      data: {
-        method:      paymentMethod,
-        status:      STATUS_MAP[method],
-        slipImage:   slipFileName,
-        // ✅ pay_at_hotel ยังไม่ได้จ่าย → paymentDate เป็น null
-        paymentDate: method === "transfer" ? new Date() : null,
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      // re-check ในทรานแซกชัน: กัน race กับ expiry sweep / admin cancel ที่อาจ
+      // ยกเลิก booking หลังอ่านค่าด้านบนแต่ก่อนบันทึกการชำระ
+      const fresh = await tx.booking.findUnique({
+        where:  { id: booking.id },
+        select: { status: true, expiresAt: true },
+      })
+      if (!fresh || fresh.status !== "PENDING" || (fresh.expiresAt && fresh.expiresAt < new Date())) {
+        throw new BookingNotPayableError()
+      }
+
+      const u = await tx.paymentTransaction.update({
+        where: { id: pendingTx.id },
+        data: {
+          method:      paymentMethod,
+          status:      STATUS_MAP[method],
+          slipImage:   slipFileName,
+          // ✅ pay_at_hotel ยังไม่ได้จ่าย → paymentDate เป็น null
+          paymentDate: method === "transfer" ? new Date() : null,
+        },
+      })
+      // ลูกค้าดำเนินการชำระ (อัปสลิป/เลือกจ่ายที่ hotel) แล้ว →
+      // ปลด expiresAt เพื่อไม่ให้ auto-cancel ยกเลิก booking นี้
+      await tx.booking.update({
+        where: { id: booking.id },
+        data:  { expiresAt: null },
+      })
+      return u
     })
 
     return NextResponse.json({
@@ -173,6 +160,12 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
+    if (error instanceof BookingNotPayableError) {
+      return NextResponse.json(
+        { message: "ໝົດເວລາຊຳລະ ຫຼື ການຈອງຖືກຍົກເລີກແລ້ວ ກະລຸນາຈອງໃໝ່" },
+        { status: 409 }
+      )
+    }
     console.error("[PAYMENT_POST]", error)
     return NextResponse.json({ message: "Server error" }, { status: 500 })
   }

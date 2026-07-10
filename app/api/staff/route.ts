@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { StaffRole, Role } from "@prisma/client"
+import { nextId } from "@/lib/ids"
 import bcrypt from "bcryptjs"
 
 // GET /api/staff
@@ -57,10 +58,11 @@ export async function POST(request: NextRequest) {
 
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { name, lastName, email, phone, password: hashed, role: userRole },
+        data: { id: nextId("user"), name, lastName, email, phone, password: hashed, role: userRole },
       })
       const staff = await tx.staff.create({
         data: {
+          id:        nextId("staff"),
           userId:    user.id,
           position:  position ?? null,
           role:      staffRole,

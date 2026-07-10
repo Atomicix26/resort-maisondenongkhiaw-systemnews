@@ -8,6 +8,7 @@ import {
   ArrowUpDown, Loader2, RefreshCw, Search, ShieldCheck,
 } from "lucide-react"
 import { SuperAdminSidebar } from "@/components/superadmin-sidebar"
+import { ProfileMenu } from "@/components/profile-menu"
 
 // ── Types ────────────────────────────────────────────────────────
 type StaffRole = "STAFF" | "MANAGER" | "ADMIN"
@@ -99,14 +100,14 @@ function StaffModal({
       <label className="text-[11px] text-gray-600 font-semibold">{label}{required && " *"}</label>
       <input type={type} value={form[key]} onChange={(e) => set(key, e.target.value)}
         placeholder={placeholder}
-        className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 bg-white outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-50" />
+        className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50" />
     </div>
   )
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-7 relative max-h-[90vh] overflow-y-auto">
-        <button onClick={onClose} className="absolute top-5 right-5 text-gray-300 hover:text-gray-600"><X size={18} /></button>
+        <button onClick={onClose} className="absolute top-5 right-5 text-gray-400 hover:text-gray-600"><X size={18} /></button>
         <h2 className="text-[16px] font-bold text-gray-900 mb-5">
           {mode === "add" ? "➕ ເພີ່ມພະນັກງານໃໝ່" : "✏️ ແກ້ໄຂຂໍ້ມູນພະນັກງານ"}
         </h2>
@@ -128,7 +129,7 @@ function StaffModal({
             <div>
               <label className="text-[11px] text-gray-600 font-semibold">ບົດບາດ</label>
               <select value={form.role} onChange={(e) => set("role", e.target.value)}
-                className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 bg-white outline-none focus:border-purple-400">
+                className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 bg-white outline-none focus:border-blue-400">
                 {(Object.keys(ROLE_CFG) as StaffRole[]).map((r) => (
                   <option key={r} value={r}>{ROLE_CFG[r].label}</option>
                 ))}
@@ -152,7 +153,7 @@ function StaffModal({
               ຍົກເລີກ
             </button>
             <button type="submit" disabled={saving}
-              className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[13px] font-semibold disabled:opacity-50">
+              className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[13px] font-semibold disabled:opacity-50">
               {saving ? "ກຳລັງບັນທຶກ..." : mode === "add" ? "ເພີ່ມພະນັກງານ" : "ບັນທຶກ"}
             </button>
           </div>
@@ -231,7 +232,7 @@ export default function SuperAdminStaffPage() {
 
   if (status === "loading") return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Loader2 size={28} className="text-purple-500 animate-spin" />
+      <Loader2 size={28} className="text-blue-500 animate-spin" />
     </div>
   )
 
@@ -243,12 +244,7 @@ export default function SuperAdminStaffPage() {
         {/* Header */}
         <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-30">
           <h1 className="text-[14px] font-bold text-gray-900">ຈັດການຂໍ້ມູນພະນັກງານ</h1>
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] text-gray-400">{session?.user?.name}</span>
-            <div className="w-7 h-7 rounded-full bg-purple-600 flex items-center justify-center text-white text-[11px] font-bold">
-              {session?.user?.name?.[0] ?? "A"}
-            </div>
-          </div>
+          <ProfileMenu />
         </header>
 
         <div className="flex-1 p-8">
@@ -257,23 +253,23 @@ export default function SuperAdminStaffPage() {
             {(["ALL", "STAFF", "MANAGER", "ADMIN"] as const).map((r) => (
               <button key={r} onClick={() => setFilterRole(r)}
                 className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors
-                  ${filterRole === r ? "bg-[#120B2E] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  ${filterRole === r ? "bg-[#071A33] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                 {r === "ALL" ? "ທັງໝົດ" : ROLE_CFG[r].label}
                 <span className="ml-1.5 opacity-60">({counts[r]})</span>
               </button>
             ))}
             <div className="ml-auto flex items-center gap-2">
               <div className="relative">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input value={search} onChange={(e) => setSearch(e.target.value)}
                   placeholder="ຄົ້ນຫາພະນັກງານ..."
-                  className="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-[12px] text-gray-700 bg-white outline-none focus:border-purple-300 w-48" />
+                  className="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-[12px] text-gray-700 bg-white outline-none focus:border-blue-300 w-48" />
               </div>
               <button onClick={fetchStaff} className="p-2 bg-white border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50">
                 <RefreshCw size={13} />
               </button>
               <button onClick={() => setModal({ mode: "add" })}
-                className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white px-4 py-1.5 rounded-lg text-[12px] font-semibold transition-all active:scale-95">
+                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-[12px] font-semibold transition-all active:scale-95">
                 <Plus size={13} /> ເພີ່ມພະນັກງານ
               </button>
             </div>
@@ -293,18 +289,18 @@ export default function SuperAdminStaffPage() {
                 { label: "",           key: null        },
               ].map(({ label, key }, i) => (
                 <button key={i} onClick={() => key && setSortBy(key as typeof sortBy)}
-                  className={`flex items-center gap-1 text-[10px] font-semibold text-gray-500 uppercase tracking-wider text-left
+                  className={`flex items-center gap-1 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-left
                     ${key ? "hover:text-gray-800 cursor-pointer" : "cursor-default"}`}>
-                  {label} {key && <ArrowUpDown size={9} className="text-gray-400" />}
+                  {label} {key && <ArrowUpDown size={9} className="text-gray-500" />}
                 </button>
               ))}
             </div>
 
             {/* Body */}
             {loading ? (
-              <div className="py-16 flex justify-center"><Loader2 size={24} className="text-purple-400 animate-spin" /></div>
+              <div className="py-16 flex justify-center"><Loader2 size={24} className="text-blue-400 animate-spin" /></div>
             ) : filtered.length === 0 ? (
-              <div className="py-16 text-center text-gray-300 text-[13px]">ບໍ່ມີຂໍ້ມູນ</div>
+              <div className="py-16 text-center text-gray-400 text-[13px]">ບໍ່ມີຂໍ້ມູນ</div>
             ) : (
               <div className="divide-y divide-gray-50">
                 {filtered.map((s, i) => {
@@ -315,22 +311,22 @@ export default function SuperAdminStaffPage() {
                   return (
                     <div key={s.id}
                       className="grid grid-cols-[50px_1fr_160px_130px_120px_110px_90px] gap-2 items-center px-5 py-3.5 hover:bg-gray-50/50 transition-colors">
-                      <p className="text-[11px] text-gray-400 font-mono">{String(i + 1).padStart(2, "0")}</p>
+                      <p className="text-[11px] text-gray-500 font-mono">{String(i + 1).padStart(2, "0")}</p>
 
                       <div>
                         <p className="text-[13px] font-medium text-gray-800">{fullName}</p>
-                        <p className="text-[10px] text-gray-400">{s.user.email}</p>
+                        <p className="text-[11px] text-gray-500">{s.user.email}</p>
                       </div>
 
                       <p className="text-[12px] text-gray-500">{s.position ?? "—"}</p>
 
-                      <span className={`inline-block text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${roleCfg.color}`}>
+                      <span className={`inline-block text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${roleCfg.color}`}>
                         {roleCfg.label}
                       </span>
 
                       <div>
                         <p className="text-[12px] text-gray-500">{startFmt}</p>
-                        <p className="text-[10px] text-gray-300">ສ້າງ {createdFmt}</p>
+                        <p className="text-[11px] text-gray-400">ສ້າງ {createdFmt}</p>
                       </div>
 
                       <p className="text-[12px] font-medium text-gray-700 font-mono">
@@ -339,11 +335,11 @@ export default function SuperAdminStaffPage() {
 
                       <div className="flex items-center gap-1 justify-end">
                         <button onClick={() => setModal({ mode: "edit", item: s })}
-                          className="flex items-center gap-1 px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-lg text-[11px] font-semibold transition-all">
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-[11px] font-semibold transition-all">
                           <Pencil size={11} /> ແກ້
                         </button>
                         <button onClick={() => setConfirmDel(s.id)}
-                          className="p-1.5 bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all">
+                          className="p-1.5 bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-500 rounded-lg transition-all">
                           <Trash2 size={13} />
                         </button>
                       </div>
@@ -372,8 +368,8 @@ export default function SuperAdminStaffPage() {
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-80 text-center">
             <div className="text-3xl mb-3">🗑️</div>
             <h3 className="font-bold text-gray-800 text-[15px] mb-2">ຢືນຢັນການລຶບ</h3>
-            <p className="text-gray-400 text-[12px] mb-1">ພະນັກງານຈະຖືກ deactivate</p>
-            <p className="text-gray-400 text-[11px] mb-6">(ຂໍ້ມູນຍັງຢູ່ — ບໍ່ລຶບຖາວອນ)</p>
+            <p className="text-gray-500 text-[12px] mb-1">ພະນັກງານຈະຖືກ deactivate</p>
+            <p className="text-gray-500 text-[11px] mb-6">(ຂໍ້ມູນຍັງຢູ່ — ບໍ່ລຶບຖາວອນ)</p>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setConfirmDel(null)} disabled={deleting}
                 className="px-5 py-2 border border-gray-200 rounded-lg text-[12px] text-gray-600 hover:bg-gray-50 disabled:opacity-50">

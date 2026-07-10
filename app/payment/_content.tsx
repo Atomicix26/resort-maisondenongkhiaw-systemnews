@@ -7,8 +7,9 @@ import { useSession } from "next-auth/react"
 import {
   CheckCircle2, Upload, X, ArrowLeft,
   Bed, Users, Calendar, Banknote, Hotel,
-  Loader2, ChevronDown, Globe, AlertCircle,
+  Loader2, ChevronDown, Globe, AlertCircle, Clock,
 } from "lucide-react"
+import { REFUND_POLICY } from "@/lib/refund"
 
 // ── Types ─────────────────────────────────────────────────────────
 interface Room {
@@ -62,9 +63,9 @@ function PriceDisplay({ lak, currency }: { lak: number; currency: Currency }) {
   const val = convertPrice(lak, currency)
   return (
     <span>
-      {currency !== "LAK" && <span className="text-[11px] font-normal text-gray-400 mr-0.5">{sym}</span>}
+      {currency !== "LAK" && <span className="text-[11px] font-normal text-gray-500 mr-0.5">{sym}</span>}
       {val}
-      {currency === "LAK" && <span className="text-[11px] font-normal text-gray-400 ml-0.5">{sym}</span>}
+      {currency === "LAK" && <span className="text-[11px] font-normal text-gray-500 ml-0.5">{sym}</span>}
     </span>
   )
 }
@@ -78,14 +79,18 @@ export default function PaymentContent() {
   const roomId   = params.get("roomId")   ?? ""
   const checkIn  = params.get("checkIn")  ?? ""
   const checkOut = params.get("checkOut") ?? ""
+  // ── มาจากหน้าประวัติ: ชำระ booking ที่มีอยู่แล้ว → ข้ามขั้น "ยืนยัน"
+  //    (ไม่สร้าง booking ซ้ำ ซึ่งจะไปชนกับ booking ค้างของตัวเองใน conflict-check)
+  const existingBookingId = params.get("bookingId") ?? ""
 
   const [room,        setRoom]        = useState<Room | null>(null)
   const [loadRoom,    setLoadRoom]    = useState(true)
-  const [step,        setStep]        = useState<Step>("confirm")
+  const [step,        setStep]        = useState<Step>(existingBookingId ? "pay" : "confirm")
   const [guests,      setGuests]      = useState(1)
   const [special,     setSpecial]     = useState("")
-  const [idCard,      setIdCard]      = useState("")
-  const [bookingId,   setBookingId]   = useState("")
+  const [bookingId,   setBookingId]   = useState(existingBookingId)
+  const [expiresAt,   setExpiresAt]   = useState<string | null>(null)
+  const [nowTs,       setNowTs]       = useState(() => Date.now())
   const [method,      setMethod]      = useState<PayMethod>("transfer")
   const [currency,    setCurrency]    = useState<Currency>("LAK")
   const [slipFile,    setSlipFile]    = useState<File | null>(null)
@@ -115,8 +120,37 @@ export default function PaymentContent() {
     return () => URL.revokeObjectURL(slipPreview)
   }, [slipPreview])
 
+  // ── โหลด booking ที่มีอยู่ (เมื่อมาจากประวัติ) เพื่อดึงกำหนดชำระ + จำนวนคน ──
+  useEffect(() => {
+    if (!existingBookingId) return
+    fetch(`/api/bookings/${existingBookingId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => {
+        if (!b) return
+        // นับถอยหลัง/หมดเวลา ใช้กับ booking ที่ยัง PENDING เท่านั้น —
+        // booking ที่ยืนยันแล้วอาจมี expiresAt เก่าค้าง ไม่ควรถือว่าหมดเวลา
+        setExpiresAt(b.status === "PENDING" ? (b.expiresAt ?? null) : null)
+        if (b.guests) setGuests(b.guests)
+      })
+      .catch(() => {})
+  }, [existingBookingId])
+
+  // ── นับเวลาถอยหลังบนหน้าจอ: tick ทุกวินาทีเมื่อมีกำหนดชำระ ──
+  useEffect(() => {
+    if (!expiresAt) return
+    const id = window.setInterval(() => setNowTs(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [expiresAt])
+
   const days  = calcDays(checkIn, checkOut)
   const total = room ? days * room.price : 0
+
+  // ── เวลาคงเหลือสำหรับชำระ (มิลลิวินาที) — null = ไม่มีกำหนด ──
+  const remainingMs = expiresAt ? new Date(expiresAt).getTime() - nowTs : null
+  const isExpired   = remainingMs !== null && remainingMs <= 0
+  const countdown   = remainingMs !== null && remainingMs > 0
+    ? `${String(Math.floor(remainingMs / 60000)).padStart(2, "0")}:${String(Math.floor((remainingMs % 60000) / 1000)).padStart(2, "0")}`
+    : null
 
   // ── Step 1: ยืนยันการจอง ─────────────────────────────────────
   async function handleConfirm() {
@@ -130,12 +164,12 @@ export default function PaymentContent() {
           roomId, checkIn, checkOut,
           guests:         guests.toString(),
           specialRequest: special,
-          guestIdCard:    idCard,
         }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.message ?? "ຈອງບໍ່ສຳເລັດ"); return }
       setBookingId(data.booking.id)
+      setExpiresAt(data.booking.expiresAt ?? null)
       setStep("pay")
     } catch {
       setError("ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່")
@@ -210,7 +244,7 @@ export default function PaymentContent() {
           <h2 className="text-xl font-bold text-gray-900 mb-1">
             {isHotelPay ? "ການຈອງຢືນຢັນແລ້ວ!" : "ອັບໂຫຼດສລິບສຳເລັດ!"}
           </h2>
-          <p className="text-[13px] font-medium text-gray-400 mb-4">
+          <p className="text-[13px] font-medium text-gray-500 mb-4">
             {isHotelPay ? "Booking Confirmed!" : "Slip Uploaded!"}
           </p>
 
@@ -221,7 +255,7 @@ export default function PaymentContent() {
               </p>
               <p className="text-[11px] text-amber-700">
                 Please pay at the hotel upon check-in.<br/>
-                ชำระเงินที่โรงแรมในวันเข้าพัก
+                ຊຳລະເງິນທີ່ໂຮງແຮມໃນວັນ Check-in
               </p>
             </div>
           )}
@@ -234,16 +268,16 @@ export default function PaymentContent() {
           )}
 
           <div className="bg-gray-50 rounded-xl p-4 mb-5 text-left space-y-2 text-[12px]">
-            <div className="flex justify-between"><span className="text-gray-400">Booking ID</span><span className="font-mono text-[10px]">{bookingId}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">ຫ້ອງ / Room</span><span className="font-medium">{room.name}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Check-in</span><span className="font-medium">{checkIn}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Check-out</span><span className="font-medium">{checkOut}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Booking ID</span><span className="font-mono text-[11px]">{bookingId}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">ຫ້ອງ / Room</span><span className="font-medium">{room.name}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Check-in</span><span className="font-medium">{checkIn}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Check-out</span><span className="font-medium">{checkOut}</span></div>
             <div className="flex justify-between border-t border-gray-200 pt-2">
-              <span className="text-gray-400">Total / ລວມ</span>
+              <span className="text-gray-500">Total / ລວມ</span>
               <span className="font-bold text-blue-600">
                 {total.toLocaleString()} ₭
                 {currency !== "LAK" && (
-                  <span className="text-gray-400 font-normal ml-1 text-[10px]">
+                  <span className="text-gray-500 font-normal ml-1 text-[11px]">
                     ≈ {CURRENCY_SYMBOL[currency]}{convertPrice(total, currency)}
                   </span>
                 )}
@@ -276,19 +310,24 @@ export default function PaymentContent() {
 
           {/* Back + Currency selector */}
           <div className="flex items-center justify-between mb-6">
-            <button onClick={() => step === "pay" ? setStep("confirm") : router.back()}
-              className="flex items-center gap-1.5 text-[12px] text-gray-400 hover:text-gray-700 transition-colors">
+            <button onClick={() => {
+                if (step !== "pay") { router.back(); return }
+                // มาจากประวัติ → ย้อนกลับไปประวัติ (อย่ากลับไปสร้าง booking ซ้ำ)
+                if (existingBookingId) { router.push("/history"); return }
+                setStep("confirm")
+              }}
+              className="flex items-center gap-1.5 text-[12px] text-gray-500 hover:text-gray-700 transition-colors">
               <ArrowLeft size={14} />
-              {step === "pay" ? "ກັບ / Back" : "ກັບ / Back"}
+              ກັບ / Back
             </button>
 
             {/* ✅ Currency selector สำหรับลูกค้าต่างชาติ */}
             <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2 py-1 border border-gray-200">
-              <Globe size={12} className="text-gray-400" />
+              <Globe size={12} className="text-gray-500" />
               {(["LAK", "USD", "THB"] as Currency[]).map((c) => (
                 <button key={c} onClick={() => setCurrency(c)}
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded transition-all ${
-                    currency === c ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-700"
+                  className={`text-[11px] font-bold px-2 py-0.5 rounded transition-all ${
+                    currency === c ? "bg-blue-600 text-white" : "text-gray-500 hover:text-gray-700"
                   }`}>
                   {c}
                 </button>
@@ -303,11 +342,11 @@ export default function PaymentContent() {
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors ${
                   step === s ? "bg-blue-600 text-white" :
                   (step === "pay" && s === "confirm") ? "bg-green-500 text-white" :
-                  "bg-gray-100 text-gray-400"
+                  "bg-gray-100 text-gray-500"
                 }`}>
                   {step === "pay" && s === "confirm" ? <CheckCircle2 size={13}/> : i+1}
                 </div>
-                <span className={`text-[12px] font-medium ${step === s ? "text-gray-900" : "text-gray-400"}`}>
+                <span className={`text-[12px] font-medium ${step === s ? "text-gray-900" : "text-gray-500"}`}>
                   {s === "confirm" ? "ຢືນຢັນ / Confirm" : "ຊຳລະ / Payment"}
                 </span>
                 {i < 1 && <div className="w-6 h-px bg-gray-200 mx-1"/>}
@@ -319,9 +358,9 @@ export default function PaymentContent() {
           {step === "confirm" && (
             <div className="space-y-5">
               <div>
-                <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1">ຫ້ອງ / Room</p>
+                <p className="text-[11px] text-gray-500 uppercase tracking-widest mb-1">ຫ້ອງ / Room</p>
                 <p className="text-[20px] font-bold text-blue-600">{room.name}</p>
-                <p className="text-[12px] text-gray-400">{room.view}</p>
+                <p className="text-[12px] text-gray-500">{room.view}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -340,7 +379,7 @@ export default function PaymentContent() {
               </div>
 
               <div>
-                <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1.5">
+                <p className="text-[11px] text-gray-500 uppercase tracking-widest mb-1.5">
                   ຈຳນວນຄົນ / Guests
                 </p>
                 <div className="relative">
@@ -350,27 +389,34 @@ export default function PaymentContent() {
                       <option key={n} value={n}>{n} ທ່ານ / Guest{n > 1 ? "s" : ""}</option>
                     ))}
                   </select>
-                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"/>
                 </div>
               </div>
 
               <div>
-                <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1.5">
-                  ເລກບັດປະຊາຊົນ / ພາສປອດ — National ID / Passport
-                </p>
-                <input value={idCard} onChange={(e) => setIdCard(e.target.value)}
-                  placeholder="ເລກບັດປະຊາຊົນ ຫຼື ພາສປອດ ຜູ້ເຂົ້າພັກ"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-[13px] outline-none text-gray-800 focus:border-blue-300" />
-              </div>
-
-              <div>
-                <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-1.5">
+                <p className="text-[11px] text-gray-500 uppercase tracking-widest mb-1.5">
                   ຄຳຮ້ອງຂໍພິເສດ / Special Request
                 </p>
                 <textarea value={special} onChange={(e) => setSpecial(e.target.value)} rows={2}
                   placeholder="ຕ້ອງການຫຍັງພິເສດ? / Any special requests?"
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-[13px] outline-none resize-none text-gray-800 focus:border-blue-300"/>
               </div>
+
+              {/* นโยบายเงินคืน / ยกเลิก — ให้ลูกค้ารับทราบก่อนจอง */}
+              <details className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+                <summary className="text-[12px] font-bold text-gray-700 cursor-pointer select-none">
+                  ນະໂຍບາຍຍົກເລີກ / ຄືນເງິນ — Cancellation Policy
+                </summary>
+                <ul className="mt-2.5 space-y-1">
+                  {REFUND_POLICY.map((p) => (
+                    <li key={p.percent} className="flex justify-between text-[12px] text-gray-700">
+                      <span>{p.label}</span>
+                      <span className={`font-bold ${p.percent > 0 ? "text-green-600" : "text-red-500"}`}>ຄືນ {p.percent}%</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[11px] text-gray-500 mt-2">* ຄິດຈາກວັນທີ່ຂໍຍົກເລີກຫາວັນ Check-in · ຄືນຕາມຍອດທີ່ຊຳລະຈິງ</p>
+              </details>
 
               {error && (
                 <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
@@ -391,8 +437,27 @@ export default function PaymentContent() {
           {/* ── STEP 2: PAY ─────────────────────────────────── */}
           {step === "pay" && (
             <div className="space-y-5">
+              {/* Countdown — เวลาที่เหลือก่อน booking ถูกยกเลิกอัตโนมัติ */}
+              {countdown && (
+                <div className="flex items-center justify-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                  <Clock size={14} className="text-amber-500 flex-shrink-0" />
+                  <p className="text-[12px] text-amber-700">
+                    ກະລຸນາຊຳລະພາຍໃນ <span className="font-bold font-mono text-amber-800">{countdown}</span>
+                    {" "}— ຖ້າເກີນເວລາ ການຈອງຈະຖືກຍົກເລີກອັດຕະໂນມັດ
+                  </p>
+                </div>
+              )}
+              {isExpired && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                  <AlertCircle size={14} className="text-red-500 flex-shrink-0" />
+                  <p className="text-[12px] text-red-600">
+                    ໝົດເວລາຊຳລະ — ການຈອງນີ້ຖືກຍົກເລີກແລ້ວ ກະລຸນາຈອງໃໝ່
+                  </p>
+                </div>
+              )}
+
               <div>
-                <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-3">
+                <p className="text-[11px] text-gray-500 uppercase tracking-widest mb-3">
                   ວິທີຊຳລະ / Payment Method
                 </p>
 
@@ -411,7 +476,7 @@ export default function PaymentContent() {
                       <p className={`text-[13px] font-semibold ${method === "transfer" ? "text-blue-700" : "text-gray-700"}`}>
                         ໂອນເງິນ / Bank Transfer
                       </p>
-                      <p className="text-[11px] text-gray-400">
+                      <p className="text-[11px] text-gray-500">
                         ອັບໂຫຼດສລິບ — Admin ກວດສອບ / Upload slip for verification
                       </p>
                     </div>
@@ -431,7 +496,7 @@ export default function PaymentContent() {
                       <p className={`text-[13px] font-semibold ${method === "pay_at_hotel" ? "text-amber-700" : "text-gray-700"}`}>
                         ຈ່າຍທີ່ Hotel / Pay at Hotel
                       </p>
-                      <p className="text-[11px] text-gray-400">
+                      <p className="text-[11px] text-gray-500">
                         ຊຳລະໃນວັນ Check-in — ຮອງຮັບ LAK, USD, THB, CNY
                       </p>
                     </div>
@@ -454,14 +519,14 @@ export default function PaymentContent() {
                         <p className="text-gray-600">ທະນາຄານ / Bank: <span className="font-semibold text-gray-900">BCEL</span></p>
                         <p className="text-gray-600">ເລກບັນຊີ / Account: <span className="font-mono font-semibold text-gray-900">0123-456-789</span></p>
                         <p className="text-gray-600">ຊື່ / Name: <span className="font-semibold text-gray-900">Resort MDNK1</span></p>
-                        <p className="text-gray-500 text-[10px]">* ສາມາດໂອນ USD/THB ໄດ້ / USD/THB accepted</p>
+                        <p className="text-gray-500 text-[11px]">* ສາມາດໂອນ USD/THB ໄດ້ / USD/THB accepted</p>
                       </div>
                     </div>
                   </div>
 
                   {/* อัปโหลดสลิป */}
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-2">
+                    <p className="text-[11px] text-gray-500 uppercase tracking-widest mb-2">
                       ອັບໂຫຼດສລິບ / Upload Slip
                     </p>
                     <input ref={fileRef} type="file"
@@ -483,9 +548,9 @@ export default function PaymentContent() {
                         </div>
                       ) : (
                         <>
-                          <Upload size={22} className="text-gray-300 mb-2"/>
-                          <p className="text-[11px] text-gray-400 font-medium">ກົດເພື່ອເລືອກ / Click to upload</p>
-                          <p className="text-[10px] text-gray-300 mt-1">PNG, JPG, WEBP — max 5MB</p>
+                          <Upload size={22} className="text-gray-400 mb-2"/>
+                          <p className="text-[11px] text-gray-500 font-medium">ກົດເພື່ອເລືອກ / Click to upload</p>
+                          <p className="text-[11px] text-gray-400 mt-1">PNG, JPG, WEBP — max 5MB</p>
                         </>
                       )}
                     </div>
@@ -495,16 +560,19 @@ export default function PaymentContent() {
 
               {/* Pay at Hotel: แสดงข้อมูล */}
               {method === "pay_at_hotel" && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
-                  <p className="text-[12px] font-semibold text-amber-800 flex items-center gap-1.5">
-                    <Hotel size={14}/> ໝາຍເຫດ / Important Note
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2.5">
+                  <p className="text-[13px] font-bold text-amber-900 flex items-center gap-1.5">
+                    <Hotel size={15}/> ໝາຍເຫດ / Important Note
                   </p>
-                  <ul className="text-[11px] text-amber-700 space-y-1.5">
+                  <ul className="text-[12px] text-amber-800 space-y-1.5 leading-relaxed">
                     <li>• ກະລຸນານຳ Booking ID ໄປສະແດງທີ່ Front Desk</li>
                     <li>• Please present your Booking ID at the Front Desk</li>
                     <li>• ຮອງຮັບ: LAK 🇱🇦 · USD 🇺🇸 · THB 🇹🇭 · CNY 🇨🇳</li>
-                    <li>• <strong>ການຈອງຈະຖືກຍົກເລີກ ຖ້າຊ້ຳກ່ວາ 30 ນາທີ ຫຼັງ Check-in</strong></li>
                   </ul>
+                  <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                    <AlertCircle size={15} className="text-red-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-[12px] font-bold text-red-700 leading-snug">ການຈອງຈະຖືກຍົກເລີກ (No-show) ຖ້າບໍ່ມາ Check-in ພາຍໃນ 18:00 ຂອງວັນ Check-in — ບໍ່ຄືນເງິນ</p>
+                  </div>
                 </div>
               )}
 
@@ -515,17 +583,19 @@ export default function PaymentContent() {
                 </div>
               )}
 
-              <button onClick={handlePay} disabled={loading}
-                className={`w-full py-3.5 text-white rounded-xl text-[14px] font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 ${
+              <button onClick={handlePay} disabled={loading || isExpired}
+                className={`w-full py-3.5 text-white rounded-xl text-[14px] font-bold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
                   method === "pay_at_hotel"
                     ? "bg-amber-500 hover:bg-amber-600"
                     : "bg-blue-600 hover:bg-blue-700"
                 }`}>
                 {loading
                   ? <><Loader2 size={16} className="animate-spin"/> ກຳລັງດຳເນີນການ...</>
-                  : method === "pay_at_hotel"
-                    ? "✓ ຢືນຢັນ / Confirm Booking"
-                    : "✓ ສົ່ງສລິບ / Submit Slip"}
+                  : isExpired
+                    ? "ໝົດເວລາຊຳລະ"
+                    : method === "pay_at_hotel"
+                      ? "✓ ຢືນຢັນ / Confirm Booking"
+                      : "✓ ສົ່ງສລິບ / Submit Slip"}
               </button>
             </div>
           )}
@@ -534,7 +604,7 @@ export default function PaymentContent() {
         {/* ── RIGHT: Summary ────────────────────────────────── */}
         <div className="flex-1 bg-gray-50 border-l border-gray-100 p-8 md:p-10 flex flex-col justify-between">
           <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-5">
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-5">
               ສະຫຼຸບ / Summary
             </p>
 
@@ -544,7 +614,7 @@ export default function PaymentContent() {
             </div>
 
             <h3 className="font-bold text-gray-900 text-[15px] mb-1">{room.name}</h3>
-            <p className="text-[11px] text-gray-400 mb-4">{room.view}</p>
+            <p className="text-[11px] text-gray-500 mb-4">{room.view}</p>
             <div className="flex gap-4 text-[11px] text-gray-500">
               <span className="flex items-center gap-1"><Bed size={11}/> {room.bedType}</span>
               <span className="flex items-center gap-1"><Users size={11}/> max {room.capacity}</span>
@@ -554,17 +624,17 @@ export default function PaymentContent() {
           {/* Price breakdown */}
           <div className="space-y-3 pt-5 border-t border-gray-200">
             <div className="flex justify-between text-[12px]">
-              <span className="text-gray-400">ລາຄາ / Rate</span>
+              <span className="text-gray-500">ລາຄາ / Rate</span>
               <span className="font-medium">
                 <PriceDisplay lak={room.price} currency={currency}/> / night
               </span>
             </div>
             <div className="flex justify-between text-[12px]">
-              <span className="text-gray-400">ຈຳນວນ / Nights</span>
+              <span className="text-gray-500">ຈຳນວນ / Nights</span>
               <span className="font-medium">{days > 0 ? `${days} nights` : "-"}</span>
             </div>
             <div className="flex justify-between text-[12px]">
-              <span className="text-gray-400">ຜູ້ເຂົ້າພັກ / Guests</span>
+              <span className="text-gray-500">ຜູ້ເຂົ້າພັກ / Guests</span>
               <span className="font-medium">{guests}</span>
             </div>
             <div className="flex justify-between items-start pt-3 border-t border-gray-200">
@@ -577,18 +647,18 @@ export default function PaymentContent() {
                 </p>
                 {/* แสดงสกุลเงินอื่นเปรียบเทียบ */}
                 {days > 0 && currency === "LAK" && (
-                  <div className="text-[10px] text-gray-400 mt-1 space-y-0.5">
+                  <div className="text-[11px] text-gray-500 mt-1 space-y-0.5">
                     <p>≈ ${convertPrice(total, "USD")} USD</p>
                     <p>≈ ฿{convertPrice(total, "THB")} THB</p>
                   </div>
                 )}
                 {days > 0 && currency !== "LAK" && (
-                  <p className="text-[10px] text-gray-400 mt-1">
+                  <p className="text-[11px] text-gray-500 mt-1">
                     = {total.toLocaleString()} ₭ LAK
                   </p>
                 )}
                 {days > 0 && (
-                  <p className="text-[9px] text-gray-300 mt-1">*ອັດຕາໂດຍປະໜານ / Approx. rate</p>
+                  <p className="text-[9px] text-gray-400 mt-1">*ອັດຕາໂດຍປະໜານ / Approx. rate</p>
                 )}
               </div>
             </div>

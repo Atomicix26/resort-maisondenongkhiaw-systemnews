@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { nextId } from "@/lib/ids"
 
 function readDate(value: unknown) {
   const date = new Date(String(value ?? ""))
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
 
     const config = await prisma.priceConfig.create({
       data: {
+        id: nextId("priceConfig"),
         roomTypeId,
         seasonName,
         priceAmount,

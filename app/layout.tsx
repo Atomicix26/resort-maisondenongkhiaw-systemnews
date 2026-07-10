@@ -3,8 +3,8 @@ import Providers from "./providers"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title:       "Resort Mai Son De Nong Khiaw",
-  description: "ລະບົບຈອງຫ້ອງພັກ Resort Mai Son De Nong Khiaw — ຫ້ອງພັກສວຍງາມທ່າມກາງທຳມະຊາດ",
+  title:       "Resort Maison De Nongkhiaw",
+  description: "ລະບົບຈອງຫ້ອງພັກ Resort Maison De Nongkhiaw — ຫ້ອງພັກສວຍງາມທ່າມກາງທຳມະຊາດ",
   keywords:    ["resort", "nong khiaw", "laos", "hotel", "booking", "ນອງຂຽວ"],
 }
 

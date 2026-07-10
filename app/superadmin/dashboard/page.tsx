@@ -7,6 +7,7 @@ import {
   Users, ShieldCheck, BedDouble, Crown, Loader2, UserCheck,
 } from "lucide-react"
 import { SuperAdminSidebar } from "@/components/superadmin-sidebar"
+import { ProfileMenu } from "@/components/profile-menu"
 import { UserManagement } from "@/components/user-management"
 
 // ── Types ────────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ export default function SuperAdminDashboard() {
 
   if (status === "loading" || loadStats) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Loader2 size={28} className="text-purple-500 animate-spin" />
+      <Loader2 size={28} className="text-blue-500 animate-spin" />
     </div>
   )
 
@@ -83,14 +84,15 @@ export default function SuperAdminDashboard() {
               <Crown size={16} className="text-yellow-500" />
               <h1 className="text-[20px] font-bold text-gray-900">SuperAdmin Dashboard</h1>
             </div>
-            <p className="text-[12px] text-gray-400">{session?.user?.email}</p>
+            <p className="text-[12px] text-gray-500">{session?.user?.email}</p>
           </div>
+          <ProfileMenu />
         </div>
 
         {/* Stats */}
         {stats && (
           <>
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">ພາບລວມລະບົບ</p>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">ພາບລວມລະບົບ</p>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <StatCard icon={Users}      label="Users"     value={stats.totalUsers}  color="bg-blue-500"    />
               <StatCard icon={ShieldCheck}label="Admins"    value={stats.totalAdmins} color="bg-purple-500"  />
@@ -106,13 +108,13 @@ export default function SuperAdminDashboard() {
         {/* Recent Access Logs */}
         {stats?.recentLogs && stats.recentLogs.length > 0 && (
           <div className="mt-8">
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">
               Access Logs ລ່າສຸດ
             </p>
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="grid grid-cols-[1fr_120px_120px_120px] gap-2 px-5 py-3 border-b border-gray-100 bg-gray-50/60">
                 {["User","Role","Login","IP"].map((h, i) => (
-                  <p key={i} className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{h}</p>
+                  <p key={i} className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{h}</p>
                 ))}
               </div>
               <div className="divide-y divide-gray-50">
@@ -123,16 +125,16 @@ export default function SuperAdminDashboard() {
                       <p className="text-[12px] font-medium text-gray-800">
                         {[log.user.name, log.user.lastName].filter(Boolean).join(" ") || "—"}
                       </p>
-                      <p className="text-[10px] text-gray-400">{log.user.email}</p>
+                      <p className="text-[11px] text-gray-500">{log.user.email}</p>
                     </div>
-                    <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit
+                    <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit
                       ${ROLE_CFG[log.userType]?.bg} ${ROLE_CFG[log.userType]?.color}`}>
                       {ROLE_CFG[log.userType]?.label}
                     </span>
                     <p className="text-[11px] text-gray-500">
                       {new Date(log.loginTime).toLocaleString("lo-LA", { dateStyle: "short", timeStyle: "short" })}
                     </p>
-                    <p className="text-[11px] text-gray-400 font-mono">{log.ipAddress ?? "—"}</p>
+                    <p className="text-[11px] text-gray-500 font-mono">{log.ipAddress ?? "—"}</p>
                   </div>
                 ))}
               </div>

@@ -2,8 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { RoomStatus } from "@prisma/client"
+import { Prisma, RoomStatus } from "@prisma/client"
 import { getEffectiveNightlyPrice } from "@/lib/pricing"
+import { nextId } from "@/lib/ids"
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -91,6 +92,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         const staff = await prisma.staff.findFirst({ where: { userId: session.user.id } })
         await prisma.statusRoom.create({
           data: {
+            id:        nextId("statusRoom"),
             roomId:    id,
             staffId:   staff?.id ?? null,
             oldStatus: current.status,
@@ -121,6 +123,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     })
     return NextResponse.json(room)
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json({ error: "ໝາຍເລກຫ້ອງນີ້ມີໃນລະບົບແລ້ວ" }, { status: 409 })
+    }
     console.error("[ROOMS_PATCH]", error)
     return NextResponse.json({ error: "Failed to update room" }, { status: 500 })
   }

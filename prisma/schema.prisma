@@ -12,7 +12,7 @@ datasource db {
 //  แก้: ไม่แยก Employee ออกมา ใช้ role แทน
 // ════════════════════════════════════════════════════════════════
 model User {
-  id        String    @id @default(cuid())
+  id        String    @id @db.VarChar(30)
   email     String    @unique
   password  String
   name      String?
@@ -21,7 +21,9 @@ model User {
   role      Role      @default(USER)
   createdAt DateTime  @default(now())
   deletedAt DateTime? // soft delete
-
+  otpCode      String?   @db.VarChar(64)
+  otpExpiresAt DateTime?
+  otpAttempts  Int       @default(0)
   // relations
   staff            Staff? // ถ้า role=ADMIN → มี Staff profile
   bookings         Booking[]
@@ -39,8 +41,8 @@ model User {
 //  แก้: ไม่มี email/password ซ้ำ — ใช้ User.email / User.password
 // ════════════════════════════════════════════════════════════════
 model Staff {
-  id                   String               @id @default(cuid())
-  userId               String               @unique // ← FK → User (1:1)
+  id                   String               @id @db.VarChar(30)
+  userId               String               @unique @db.VarChar(30) // ← FK → User (1:1)
   position             String? // ตำแหน่งงาน
   role                 StaffRole            @default(STAFF) // STAFF | MANAGER | ADMIN
   salary               Decimal?             @db.Decimal(10, 2)
@@ -63,7 +65,7 @@ model Staff {
 //  ROOM TYPE
 // ════════════════════════════════════════════════════════════════
 model RoomType {
-  id           String        @id @default(cuid())
+  id           String        @id @db.VarChar(30)
   typeName     String
   description  String?       @db.Text
   basePrice    Decimal       @db.Decimal(10, 2) // ราคาเริ่มต้น
@@ -82,11 +84,11 @@ model RoomType {
 //  ROOM
 // ════════════════════════════════════════════════════════════════
 model Room {
-  id          String     @id @default(cuid())
+  id          String     @id @db.VarChar(30)
   roomNumber  String?    @unique // เลขห้อง เช่น "101"
   name        String
   description String?    @db.Text
-  roomTypeId  String?
+  roomTypeId  String?    @db.VarChar(30)
   price       Decimal    @db.Decimal(10, 2) // override base_price
   capacity    Int
   bedType     String?
@@ -114,8 +116,8 @@ model Room {
 //  แก้: เพิ่ม priority — ถ้า season ทับกัน priority สูงชนะ
 // ════════════════════════════════════════════════════════════════
 model PriceConfig {
-  id          String   @id @default(cuid())
-  roomTypeId  String
+  id          String   @id @db.VarChar(30)
+  roomTypeId  String   @db.VarChar(30)
   seasonName  String
   priceAmount Decimal  @db.Decimal(10, 2)
   startDate   DateTime
@@ -139,16 +141,19 @@ model PriceConfig {
 //                         CANCELLED
 // ════════════════════════════════════════════════════════════════
 model Booking {
-  id             String        @id @default(cuid())
-  userId         String
-  roomId         String
+  id             String        @id @db.VarChar(30)
+  userId         String        @db.VarChar(30)
+  roomId         String        @db.VarChar(30)
   checkIn        DateTime // วันที่จอง
   checkOut       DateTime
   guests         Int           @default(1)
   totalPrice     Decimal       @db.Decimal(10, 2)
   status         BookingStatus @default(PENDING)
   specialRequest String?       @db.Text
-  guestIdCard    String? // ເລກບັດປະຊາຊົນ/ພາສປອດ ຜູ້ເຂົ້າພັກ — ເກັບຕອນຈອງ
+  // ໝາຍເຫດ: ເລກເອກະສານຜູ້ເຂົ້າພັກ ຍ້າຍໄປເກັບຕອນ check-in ທີ່ CheckInLog (ພະນັກງານກວດຈິງ)
+  // ໝົດເວລາຊຳລະ: PENDING booking ທີ່ບໍ່ຊຳລະກ່ອນເວລານີ້ຈະຖືກຍົກເລີກອັດຕະໂນມັດ (10 ນາທີ).
+  // null = ລູກຄ້າໄດ້ດຳເນີນການຊຳລະແລ້ວ ຫຼື ບໍ່ໝົດອາຍຸ
+  expiresAt      DateTime?
 
   actualCheckIn  DateTime? // เวลา check-in จริงล่าสุด
   actualCheckOut DateTime? // เวลา check-out จริงล่าสุด
@@ -169,6 +174,7 @@ model Booking {
   @@index([roomId])
   @@index([status])
   @@index([checkIn, checkOut])
+  @@index([status, expiresAt]) // ໃຊ້ໂດຍ job ຍົກເລີກ booking ໝົດເວລາຊຳລະ
   @@map("bookings")
 }
 
@@ -178,16 +184,16 @@ model Booking {
 //  Type: CHARGE | REFUND | ADJUSTMENT
 // ════════════════════════════════════════════════════════════════
 model PaymentTransaction {
-  id               String          @id @default(cuid())
-  bookingId        String
+  id               String          @id @db.VarChar(30)
+  bookingId        String          @db.VarChar(30)
   type             TransactionType @default(CHARGE)
   amount           Decimal         @db.Decimal(10, 2)
   method           PaymentMethod   @default(TRANSFER)
   status           PaymentStatus   @default(PENDING)
   slipImage        String?
   paymentDate      DateTime?
-  verifiedById     String? // Staff.id ที่ verify (ถ้ามี Staff profile)
-  verifiedByUserId String? // User.id ผู้ verify จริง — accountability แม้ไม่มี Staff (BUG-002)
+  verifiedById     String?         @db.VarChar(30) // Staff.id ที่ verify (ถ้ามี Staff profile)
+  verifiedByUserId String?         @db.VarChar(30) // User.id ผู้ verify จริง — accountability แม้ไม่มี Staff (BUG-002)
   verifiedAt       DateTime? // เวลาที่ verify/reject (BUG-002)
   reason           String?         @db.Text // เหตุผลตอนปฏิเสธ FAILED (BUG-002)
   createdAt        DateTime        @default(now())
@@ -208,9 +214,9 @@ model PaymentTransaction {
 //  Booking ปกติ → auto CONFIRMED ทันที
 // ════════════════════════════════════════════════════════════════
 model BookApproval {
-  id        String     @id @default(cuid())
-  bookingId String     @unique
-  staffId   String?
+  id        String     @id @db.VarChar(30)
+  bookingId String     @unique @db.VarChar(30)
+  staffId   String?    @db.VarChar(30)
   status    ApprStatus @default(PENDING)
   reason    String?    @db.Text
   refund    Boolean    @default(false)
@@ -227,13 +233,18 @@ model BookApproval {
 //  CHECK-IN LOG  (Audit trail เมื่อ Staff ทำ check-in)
 // ════════════════════════════════════════════════════════════════
 model CheckInLog {
-  id         String   @id @default(cuid())
-  bookingId  String
-  staffId    String?
-  actualTime DateTime
-  verifyDoc  String?
-  remarks    String?  @db.Text
-  createdAt  DateTime @default(now())
+  id          String    @id @db.VarChar(30)
+  bookingId   String    @db.VarChar(30)
+  staffId     String?   @db.VarChar(30)
+  actualTime  DateTime
+  // ── ເອกະສານຢືนยันตัวตน ที่พนักงานตรวจ/ถ่ายรูปจริงตอน check-in ──
+  docType     String? // ประเภทเอกสาร: ID_CARD | PASSPORT | OTHER
+  docNumber   String? // เลขที่เอกสาร
+  nationality String? // สัญชาติ
+  docExpiry   DateTime? // วันหมดอายุเอกสาร
+  docImage    String? // ชื่อไฟล์รูปเอกสาร (private/uploads/checkin-docs)
+  remarks     String?   @db.Text
+  createdAt   DateTime  @default(now())
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   staff   Staff?  @relation(fields: [staffId], references: [id])
@@ -246,9 +257,9 @@ model CheckInLog {
 //  CHECK-OUT LOG
 // ════════════════════════════════════════════════════════════════
 model CheckOutLog {
-  id         String   @id @default(cuid())
-  bookingId  String
-  staffId    String?
+  id         String   @id @db.VarChar(30)
+  bookingId  String   @db.VarChar(30)
+  staffId    String?  @db.VarChar(30)
   actualTime DateTime
   remarks    String?  @db.Text
   createdAt  DateTime @default(now())
@@ -264,15 +275,22 @@ model CheckOutLog {
 //  CANCEL REQUEST
 // ════════════════════════════════════════════════════════════════
 model CancelRequest {
-  id          String       @id @default(cuid())
-  bookingId   String       @unique
-  userId      String
+  id          String       @id @db.VarChar(30)
+  bookingId   String       @unique @db.VarChar(30)
+  userId      String       @db.VarChar(30)
   reason      String       @db.Text
   status      CancelStatus @default(PENDING)
-  refundable  Boolean      @default(false) // Admin ระบุว่าคืนเงินไหม
+  refundable  Boolean      @default(false) // มีเงินให้คืนไหม (จ่ายมาแล้ว)
+  // ── ยอดคืน คำนวณตามนโยบายเวลา (lib/refund.ts) ตอนลูกค้าขอยกเลิก ──
+  refundPercent Int? //  % ที่คืน (100 / 50 / 30 / 0)
+  refundAmount  Decimal? @db.Decimal(10, 2) // ยอดเงินคืนจริง
+  // ── บัญชีรับเงินคืน (ไม่มี payment gateway → โอนคืนมือ) ──
+  refundBankName      String?
+  refundAccountName   String?
+  refundAccountNumber String?
   requestDate DateTime     @default(now())
   actionDate  DateTime?
-  staffId     String?
+  staffId     String?      @db.VarChar(30)
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id])
@@ -287,8 +305,8 @@ model CancelRequest {
 //  REVIEW
 // ════════════════════════════════════════════════════════════════
 model Review {
-  id        String    @id @default(cuid())
-  bookingId String    @unique
+  id        String    @id @db.VarChar(30)
+  bookingId String    @unique @db.VarChar(30)
   rating    Int // 1–5
   comment   String?   @db.Text
   createdAt DateTime  @default(now())
@@ -304,9 +322,9 @@ model Review {
 //  REVIEW MANAGE  (Admin Reply / Moderate)
 // ════════════════════════════════════════════════════════════════
 model ReviewManage {
-  id         String       @id @default(cuid())
-  reviewId   String       @unique
-  staffId    String?
+  id         String       @id @db.VarChar(30)
+  reviewId   String       @unique @db.VarChar(30)
+  staffId    String?      @db.VarChar(30)
   status     ReviewStatus @default(PENDING)
   reply      String?      @db.Text
   actionDate DateTime?
@@ -322,9 +340,9 @@ model ReviewManage {
 //  STATUS ROOM  (Audit trail การเปลี่ยนสถานะห้อง)
 // ════════════════════════════════════════════════════════════════
 model StatusRoom {
-  id        String     @id @default(cuid())
-  roomId    String
-  staffId   String?
+  id        String     @id @db.VarChar(30)
+  roomId    String     @db.VarChar(30)
+  staffId   String?    @db.VarChar(30)
   oldStatus RoomStatus
   newStatus RoomStatus
   reason    String?
@@ -341,8 +359,8 @@ model StatusRoom {
 //  ACCESS LOG  (SuperAdmin audit)
 // ════════════════════════════════════════════════════════════════
 model AccessLog {
-  id         String    @id @default(cuid())
-  userId     String
+  id         String    @id @db.VarChar(30)
+  userId     String    @db.VarChar(30)
   userType   Role
   ipAddress  String?
   loginTime  DateTime  @default(now())
@@ -380,8 +398,8 @@ enum RoomStatus {
 
 // Booking State Machine
 // PENDING → CONFIRMED → CHECKED_IN → CHECKED_OUT → COMPLETED
-//       ↘                                        ↗
-//        CANCELLED ←─────────────────────────────
+//       ↘          ↘                             ↗
+//        CANCELLED  NO_SHOW ←──────────────────── (ບໍ່ມາ Check-in ພາຍໃນ 18:00 ຂອງວັນ Check-in)
 enum BookingStatus {
   PENDING
   CONFIRMED
@@ -389,6 +407,7 @@ enum BookingStatus {
   CHECKED_OUT
   COMPLETED
   CANCELLED
+  NO_SHOW // ລູກຄ້າບໍ່ມາ Check-in ຕາມກຳນົດ — ຫ້ອງຖືກປ່ອຍ, ບໍ່ຄืนເງິນ (0%)
 }
 
 enum TransactionType {

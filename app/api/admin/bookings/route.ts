@@ -34,9 +34,11 @@ export async function GET(request: NextRequest) {
       include: {
         user:         { select: { id: true, name: true, lastName: true, email: true, phone: true } },
         room:         { select: { id: true, name: true, roomNumber: true } },
-        transactions: { orderBy: { createdAt: "desc" }, take: 1 },
+        transactions: { orderBy: { createdAt: "desc" }, take: 5 }, // CHARGE + REFUND
         approval:     true,
         cancelRequest:true,
+        // เอกสารยืนยันตัวตนที่บันทึกไว้ตอน check-in (ล่าสุด)
+        checkInLogs:  { orderBy: { createdAt: "desc" }, take: 1 },
       },
       orderBy: { createdAt: "desc" },
     })

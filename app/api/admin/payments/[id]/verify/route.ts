@@ -56,10 +56,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       })
 
       // ถ้า PAID → auto confirm booking ถ้ายัง PENDING (อยู่ใน transaction เดียวกัน)
+      // ล้าง expiresAt ด้วย — ยืนยันแล้วไม่มีกำหนดชำระอีก (กันหน้า payment ขึ้น "หมดเวลา" ผิด)
       if (status === "PAID" && existing.booking.status === "PENDING") {
         await txc.booking.update({
           where: { id: existing.bookingId },
-          data:  { status: "CONFIRMED" },
+          data:  { status: "CONFIRMED", expiresAt: null },
         })
       }
 
