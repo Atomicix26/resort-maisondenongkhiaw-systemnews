@@ -40,3 +40,4 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL || 'mysql://user:pass@localhost:3306/db' }}
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'ci-placeholder-secret' }}
           NEXTAUTH_URL: http://localhost:3000
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || 'test_resend_key_for_ci' }}
