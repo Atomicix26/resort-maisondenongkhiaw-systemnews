@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react"
 import Image from "next/image"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
+import { toast } from "sonner"
 import {
   CheckCircle2, Upload, X, ArrowLeft,
   Bed, Users, Calendar, Banknote, Hotel,
@@ -26,8 +27,7 @@ type Step      = "confirm" | "pay" | "success"
 type PayMethod = "transfer" | "pay_at_hotel"
 type Currency  = "LAK" | "USD" | "THB"
 
-// ── Exchange rates (approximate — สำหรับ display เท่านั้น)
-// Production: ควรดึงจาก API เช่น exchangerate-api.com
+
 const RATES: Record<Currency, number> = {
   LAK: 1,
   USD: 1 / 21500,  // 1 USD ≈ 21,500 LAK
@@ -76,12 +76,12 @@ export default function PaymentContent() {
   const params  = useSearchParams()
   const { status } = useSession()
 
-  const roomId   = params.get("roomId")   ?? ""
-  const checkIn  = params.get("checkIn")  ?? ""
-  const checkOut = params.get("checkOut") ?? ""
+  const roomId   = params?.get("roomId")   ?? ""
+  const checkIn  = params?.get("checkIn")  ?? ""
+  const checkOut = params?.get("checkOut") ?? ""
   // ── มาจากหน้าประวัติ: ชำระ booking ที่มีอยู่แล้ว → ข้ามขั้น "ยืนยัน"
   //    (ไม่สร้าง booking ซ้ำ ซึ่งจะไปชนกับ booking ค้างของตัวเองใน conflict-check)
-  const existingBookingId = params.get("bookingId") ?? ""
+  const existingBookingId = params?.get("bookingId") ?? ""
 
   const [room,        setRoom]        = useState<Room | null>(null)
   const [loadRoom,    setLoadRoom]    = useState(true)
@@ -156,6 +156,11 @@ export default function PaymentContent() {
   async function handleConfirm() {
     if (!room || days <= 0) { setError("ວັນທີບໍ່ຖືກຕ້ອງ"); return }
     setError(""); setLoading(true)
+    
+    const toastId = toast.loading("ກຳລັງສ້າងການຈອງ...", {
+      description: "Creating your booking...",
+    })
+    
     try {
       const res = await fetch("/api/bookings", {
         method:  "POST",
@@ -167,11 +172,23 @@ export default function PaymentContent() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.message ?? "ຈອງບໍ່ສຳເລັດ"); return }
+      if (!res.ok) { 
+        toast.error(data.message ?? "ຈອງບໍ່ສຳເລັດ", { id: toastId })
+        setError(data.message ?? "ຈອງບໍ່ສຳເລັດ")
+        return 
+      }
+      toast.success("ຈອງສຳເລັດ ✓", {
+        id: toastId,
+        description: "Booking confirmed! Proceeding to payment...",
+      })
       setBookingId(data.booking.id)
       setExpiresAt(data.booking.expiresAt ?? null)
       setStep("pay")
     } catch {
+      toast.error("ເກີດຂໍ້ຜິດພາດ", {
+        id: toastId,
+        description: "Please try again",
+      })
       setError("ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່")
     } finally {
       setLoading(false)
@@ -181,20 +198,54 @@ export default function PaymentContent() {
   // ── Step 2: ชำระเงิน ─────────────────────────────────────────
   async function handlePay() {
     setError(""); setLoading(true)
+    
+    const toastId = toast.loading("ກຳລັງປະມວນການຊໍາລະ...", {
+      description: "Processing payment...",
+    })
+    
     try {
       const fd = new FormData()
       fd.append("bookingId", bookingId)
       fd.append("method", method)
       if (method === "transfer") {
-        if (!slipFile) { setError("ກະລຸນາອັບໂຫຼດສລິບ"); setLoading(false); return }
+        if (!slipFile) { 
+          toast.error("ກະລຸນາອັບໂຫຼດສລິບ", {
+            id: toastId,
+            description: "Please upload the payment slip",
+          })
+          setLoading(false)
+          return 
+        }
         fd.append("slipFile", slipFile)
       }
 
       const res  = await fetch("/api/payments", { method: "POST", body: fd })
       const data = await res.json()
-      if (!res.ok) { setError(data.message ?? "ບໍ່ສຳເລັດ"); return }
+      if (!res.ok) { 
+        toast.error(data.message ?? "ຊໍາລະບໍ່ສຳເລັດ", {
+          id: toastId,
+          description: "Payment processing failed",
+        })
+        setError(data.message ?? "ບໍ່ສຳເລັດ")
+        return 
+      }
+      
+      const successMsg = method === "transfer" 
+        ? "ອັບໂຫຼດສລິບສຳເລັດ ✓" 
+        : "ຮັບລົງທະບຽນການຊໍາລະແລ້ວ ✓"
+      
+      toast.success(successMsg, {
+        id: toastId,
+        description: method === "transfer" 
+          ? "ກຳລັງລໍຖ້າ Admin ກວດສອບ" 
+          : "ຂອບໃຈ! ກະລຸນາຊໍາລະເງິນທີ່ໂຮງແຮມ",
+      })
       setStep("success")
     } catch {
+      toast.error("ເກີດຂໍ້ຜິດພາດ", {
+        id: toastId,
+        description: "Please try again",
+      })
       setError("ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່")
     } finally {
       setLoading(false)
@@ -518,7 +569,7 @@ export default function PaymentContent() {
                       <div className="text-[12px] space-y-1">
                         <p className="text-gray-600">ທະນາຄານ / Bank: <span className="font-semibold text-gray-900">BCEL</span></p>
                         <p className="text-gray-600">ເລກບັນຊີ / Account: <span className="font-mono font-semibold text-gray-900">0123-456-789</span></p>
-                        <p className="text-gray-600">ຊື່ / Name: <span className="font-semibold text-gray-900">Resort MDNK1</span></p>
+                        <p className="text-gray-600">ຊື່ / Name: <span className="font-semibold text-gray-900">Resort Maison De Nongkhiaw</span></p>
                         <p className="text-gray-500 text-[11px]">* ສາມາດໂອນ USD/THB ໄດ້ / USD/THB accepted</p>
                       </div>
                     </div>
@@ -609,7 +660,7 @@ export default function PaymentContent() {
             </p>
 
             <div className="relative h-36 w-full rounded-xl overflow-hidden mb-4 shadow-sm">
-              <Image src={getRoomCover(room)} alt={room.name} fill className="object-cover"
+              <Image src={getRoomCover(room)} alt={room.name} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover"
                 onError={(e) => { (e.target as HTMLImageElement).src = "/room.png" }}/>
             </div>
 

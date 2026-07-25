@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Loader2, RefreshCw } from "lucide-react"
 import { SuperAdminSidebar } from "@/components/superadmin-sidebar"
 import { ProfileMenu } from "@/components/profile-menu"
+import { useLanguage } from "@/components/language-provider"
 
 type Role = "USER" | "ADMIN" | "SUPERADMIN"
 
@@ -26,6 +27,7 @@ interface LogsPayload {
 export default function AccessLogsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useLanguage()
 
   const [payload, setPayload] = useState<LogsPayload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -68,13 +70,13 @@ export default function AccessLogsPage() {
       <main className="ml-[210px] flex-1 p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-[20px] font-bold text-gray-900">Access Logs</h1>
-            <p className="text-[12px] text-gray-500 mt-1">Latest login records for audit review.</p>
+            <h1 className="text-[20px] font-bold text-gray-900">{t("accessLogs")}</h1>
+            <p className="text-[12px] text-gray-500 mt-1">{t("accessLogsSubtitle")}</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={fetchLogs}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-[12px] font-semibold text-white hover:bg-blue-700">
-              <RefreshCw size={13} /> Refresh
+              <RefreshCw size={13} /> {t("refresh")}
             </button>
             <ProfileMenu />
           </div>
@@ -95,14 +97,14 @@ export default function AccessLogsPage() {
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="grid grid-cols-[1fr_110px_170px_120px_170px] gap-3 px-5 py-3 border-b border-gray-100 bg-gray-50/60">
-            {["User", "Role", "Login", "IP", "Logout"].map((head) => (
+            {[t("users"), t("role"), t("login"), t("ipAddress"), t("logout")].map((head) => (
               <p key={head} className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{head}</p>
             ))}
           </div>
           {loading ? (
             <div className="py-16 flex justify-center"><Loader2 size={24} className="text-blue-400 animate-spin" /></div>
           ) : !payload || payload.logs.length === 0 ? (
-            <div className="py-16 text-center text-gray-400 text-[13px]">No access logs found</div>
+            <div className="py-16 text-center text-gray-400 text-[13px]">{t("noAccessLogs")}</div>
           ) : (
             <div className="divide-y divide-gray-50">
               {payload.logs.map((log) => (

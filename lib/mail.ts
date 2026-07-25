@@ -1,8 +1,22 @@
 import { Resend } from "resend"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// lazy init: สร้าง client ตอนถูกเรียกใช้จริงเท่านั้น
+// กัน crash ตอน import module ถ้า RESEND_API_KEY ยังไม่ถูกตั้ง (เช่นตอนรัน test/CI)
+let resendClient: Resend | null = null
+
+function getResendClient(): Resend {
+  if (!resendClient) {
+    const apiKey = process.env.RESEND_API_KEY
+    if (!apiKey) {
+      throw new Error("RESEND_API_KEY is not set")
+    }
+    resendClient = new Resend(apiKey)
+  }
+  return resendClient
+}
 
 export async function sendOtpEmail(to: string, otp: string) {
+  const resend = getResendClient()
   await resend.emails.send({
     from: "Resort MDNK1 <noreply@yourdomain.com>",
     to,
@@ -17,6 +31,67 @@ export async function sendOtpEmail(to: string, otp: string) {
         <p style="color: #666; font-size: 14px;">
           ລະຫັດນີ້ຈະໝົດອາຍຸໃນ 5 ນາທີ. ຖ້າທ່ານບໍ່ໄດ້ຮ້ອງຂໍ ກະລຸນາລະເວັ້ນອີເມວນີ້.
         </p>
+      </div>
+    `,
+  })
+}
+
+export async function sendBookingConfirmation({
+  to,
+  customerName,
+  bookingId,
+  roomName,
+  checkIn,
+  checkOut,
+  guests,
+  totalPrice,
+}: {
+  to: string
+  customerName: string
+  bookingId: string
+  roomName: string
+  checkIn: string
+  checkOut: string
+  guests: number
+  totalPrice: number
+}) {
+  const resend = getResendClient()
+  await resend.emails.send({
+    from: "Resort Maison De Nongkhiaw <noreply@yourdomain.com>",
+    to,
+    subject: "🎉 Booking Confirmation",
+
+    html: `
+      <div style="font-family:Arial,sans-serif">
+
+      <h2>🏨 Resort Maison De Nongkhiaw</h2>
+
+      <h3>Booking Confirmation</h3>
+
+      <p>Hello <b>${customerName}</b></p>
+
+      <p>Your booking has been received.</p>
+
+      <hr>
+
+      <p><b>Booking ID :</b> ${bookingId}</p>
+
+      <p><b>Room :</b> ${roomName}</p>
+
+      <p><b>Check In :</b> ${checkIn}</p>
+
+      <p><b>Check Out :</b> ${checkOut}</p>
+
+      <p><b>Guests :</b> ${guests}</p>
+
+      <p><b>Total :</b> ${totalPrice.toLocaleString()} Kip</p>
+
+      <hr>
+
+      <p style="color:orange;font-weight:bold">
+      Status : Waiting for Confirmation
+      </p>
+
       </div>
     `,
   })

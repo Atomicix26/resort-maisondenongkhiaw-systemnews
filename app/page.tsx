@@ -27,6 +27,9 @@ interface Room {
   amenities:   string[]
   featured:    boolean
   imageUrl:    string | null
+  status:      "AVAILABLE" | "OCCUPIED" | "MAINTENANCE" | "RESERVED"
+  available:   boolean
+  unavailableReason: string | null
 }
 
 // ── helpers ──────────────────────────────────────────────────────
@@ -34,6 +37,11 @@ function getRoomCover(room: Room): string {
   if (room.images?.[0] && !room.images[0].includes("placeholder")) return room.images[0]
   if (room.imageUrl) return room.imageUrl
   return "/room.png"
+}
+
+function roomUnavailableText(room: Room) {
+  if (room.available) return ""
+  return room.unavailableReason ?? "ບໍ່ພ້ອມໃຊ້ງານ"
 }
 
 export default function Home() {
@@ -52,8 +60,13 @@ export default function Home() {
   const fetchRooms = useCallback(async (q = "") => {
     setLoading(true)
     try {
-      const url = q ? `/api/rooms?search=${encodeURIComponent(q)}` : "/api/rooms"
-      const res = await fetch(url)
+      const params = new URLSearchParams()
+      if (q) params.set("search", q)
+      if (checkIn && checkOut) {
+        params.set("checkIn", checkIn)
+        params.set("checkOut", checkOut)
+      }
+      const res = await fetch(`/api/rooms${params.size ? `?${params}` : ""}`)
       if (!res.ok) throw new Error("fetch failed")
       const data: Room[] = await res.json()
       setRooms(data)
@@ -62,7 +75,7 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [checkIn, checkOut])
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void fetchRooms() }, 0)
@@ -83,6 +96,9 @@ export default function Home() {
     }
     const room = rooms.find((r) => r.id === selectedRoom)
     if (!room) return
+    if (!room.available) {
+      alert(roomUnavailableText(room)); return
+    }
     router.push(
       `/payment?roomId=${room.id}&checkIn=${checkIn}&checkOut=${checkOut}`
     )
@@ -102,7 +118,7 @@ export default function Home() {
 
         {/* ── Navbar ──────────────────────────────────────────── */}
         <nav className="relative z-50 flex justify-between items-center px-8 py-4 container mx-auto">
-          <p className="font-bold text-base tracking-wide drop-shadow">Resort MDNK1</p>
+          <p className="font-bold text-base tracking-wide drop-shadow"></p>
 
           {session?.user ? (
             /* ถ้า login แล้ว → แสดงชื่อ + dropdown */
@@ -152,10 +168,23 @@ export default function Home() {
         </nav>
 
         {/* Headline */}
-        <div className="relative z-20 container mx-auto px-8 mt-6">
-          <p className="text-[13px] text-white/70 mb-2 uppercase tracking-widest">{t("heroKicker")}</p>
-          <h1 className="text-4xl font-bold leading-tight drop-shadow-lg">
-            Resort Maison <br /> De Nongkhiaw
+        <div className="relative z-20 container mx-auto px-8 mt-6 text-center">
+          <p className="flex items-center justify-center gap-4 text-white/120 mb-5 uppercase tracking-[0.5em] font-light text-[24px] md:text-xs">
+            <span className="h-px w-12 md:w-16 bg-white/40" />
+            {t("heroKicker")}
+            <span className="h-px w-12 md:w-16 bg-white/40" />
+          </p>
+          <h1   className="text-5xl sm:text-6xl lg:text-8xl font-serif font-light leading-tight tracking-tight"
+              style={{ 
+                backgroundImage: 'linear-gradient(135deg, #fff 0%, #f0e5d8 50%, #e8d4b8 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                textShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.2))'
+              }}
+            >
+            Resort Maison De Nongkhiaw
           </h1>
         </div>
 
@@ -174,7 +203,10 @@ export default function Home() {
               <p className="text-[11px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">{t("checkIn")}</p>
               <input
                 type="date" min={today} value={checkIn}
-                onChange={(e) => setCheckIn(e.target.value)}
+                onChange={(e) => {
+                  setCheckIn(e.target.value)
+                  if (checkOut && e.target.value >= checkOut) setCheckOut("")
+                }}
                 className="w-full border-b border-gray-300 pb-1.5 text-[13px] text-gray-900 outline-none focus:border-blue-500"
               />
             </div>
@@ -204,7 +236,7 @@ export default function Home() {
                 type="text" placeholder={t("searchPlaceholder")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full py-2.5 pl-8 pr-3 border border-gray-200 rounded-lg bg-gray-50 text-[13px] text-gray-900 placeholder:text-gray-500 outline-none focus:border-blue-400 focus:bg-white"
+                className="w-full py-2.5 pl-8 pr-3 border border-gray-300 rounded-lg bg-white text-[13px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
             </div>
           </div>
@@ -249,10 +281,12 @@ export default function Home() {
         {/* Room cards */}
         {!loading && rooms.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {rooms.map((room) => (
+            {rooms.map((room) => {
+              const blocked = !room.available
+              return (
               <div
                 key={room.id}
-                className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-200 group"
+                className={`bg-white rounded-xl border overflow-hidden transition-all duration-200 group ${blocked ? "border-gray-200 opacity-70" : "border-gray-100 hover:shadow-lg hover:-translate-y-1"}`}
               >
                 {/* Image */}
                 <div className="relative h-44 w-full overflow-hidden">
@@ -260,7 +294,8 @@ export default function Home() {
                     src={getRoomCover(room)}
                     alt={room.name}
                     fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                    className={`object-cover transition-transform duration-300 ${blocked ? "grayscale" : "group-hover:scale-105"}`}
                     onError={(e) => { (e.target as HTMLImageElement).src = "/room.png" }}
                   />
                   {room.featured && (
@@ -271,6 +306,11 @@ export default function Home() {
                   <div className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-0.5 rounded-full text-[11px] font-bold text-blue-700">
                     {room.price.toLocaleString()} ₭
                   </div>
+                  {blocked && (
+                    <div className="absolute inset-x-0 bottom-0 bg-gray-950/75 px-3 py-2 text-[12px] font-bold text-white">
+                      {roomUnavailableText(room)}
+                    </div>
+                  )}
                 </div>
 
                 {/* Body */}
@@ -312,17 +352,19 @@ export default function Home() {
 
                   {/* CTA */}
                   <button
+                    disabled={blocked}
                     onClick={() => {
+                      if (blocked) return
                       setSelectedRoom(room.id)
                       window.scrollTo({ top: 0, behavior: "smooth" })
                     }}
-                    className="w-full mt-4 py-2.5 border-2 border-gray-800 rounded-lg text-[12px] font-bold text-gray-800 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all active:scale-95"
+                    className={`w-full mt-4 py-2.5 border-2 rounded-lg text-[12px] font-bold transition-all active:scale-95 ${blocked ? "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-400" : "border-gray-800 text-gray-800 hover:bg-gray-900 hover:text-white hover:border-gray-900"}`}
                   >
-                    {t("chooseThisRoom")}
+                    {blocked ? roomUnavailableText(room) : t("chooseThisRoom")}
                   </button>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </section>

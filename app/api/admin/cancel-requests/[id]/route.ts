@@ -35,13 +35,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       const fd   = await request.formData()
       const file = fd.get("slipFile")
       if (!(file instanceof File) || file.size === 0) {
-        return NextResponse.json({ error: "ກະລຸນາແນບສລິບການໂອນคืน" }, { status: 400 })
+        return NextResponse.json({ error: "ກະລຸນາແນບສລິບການໂອນຄືນ" }, { status: 400 })
       }
       const refundTx = await prisma.paymentTransaction.findFirst({
         where:   { bookingId: cancelReq.bookingId, type: "REFUND", status: "PENDING" },
         orderBy: { createdAt: "desc" },
       })
-      if (!refundTx) return NextResponse.json({ error: "ບໍ່ພົບລາຍການคืนเงินที่รอโอน" }, { status: 404 })
+      if (!refundTx) return NextResponse.json({ error: "ບໍ່ພົບລາຍການເງິນຄືນທີ່ລໍຖ້າໂອນ" }, { status: 404 })
 
       const saved = await saveImageUpload(file, "payment-slips", "refund")
       if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: 400 })
@@ -98,7 +98,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             amount:    refundAmount,
             method:    "TRANSFER",
             status:    "PENDING", // รอ admin โอนจริง + แนบสลิป
-            reason:    `ຄืนเงิน ${cancelReq.refundPercent ?? 0}% ตามนโยบายยกเลิก`,
+            reason:    `ຄືນເງິນ ${cancelReq.refundPercent ?? 0}% ຕາມນະໂຍບາຍຍົກເລີກ`,
           },
         })
       }

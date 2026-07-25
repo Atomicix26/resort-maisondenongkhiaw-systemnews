@@ -9,6 +9,7 @@ import {
 import { SuperAdminSidebar } from "@/components/superadmin-sidebar"
 import { ProfileMenu } from "@/components/profile-menu"
 import { UserManagement } from "@/components/user-management"
+import { useLanguage } from "@/components/language-provider"
 
 // ── Types ────────────────────────────────────────────────────────
 type Role = "USER" | "ADMIN" | "SUPERADMIN"
@@ -50,6 +51,7 @@ function StatCard({ icon: Icon, label, value, color }: {
 export default function SuperAdminDashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useLanguage()
 
   const [stats,      setStats]      = useState<Stats|null>(null)
   const [loadStats,  setLoadStats]  = useState(true)
@@ -82,7 +84,7 @@ export default function SuperAdminDashboard() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Crown size={16} className="text-yellow-500" />
-              <h1 className="text-[20px] font-bold text-gray-900">SuperAdmin Dashboard</h1>
+              <h1 className="text-[20px] font-bold text-gray-900">{t("superAdminDashboard")}</h1>
             </div>
             <p className="text-[12px] text-gray-500">{session?.user?.email}</p>
           </div>
@@ -92,12 +94,12 @@ export default function SuperAdminDashboard() {
         {/* Stats */}
         {stats && (
           <>
-            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">ພາບລວມລະບົບ</p>
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">{t("systemOverview")}</p>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <StatCard icon={Users}      label="Users"     value={stats.totalUsers}  color="bg-blue-500"    />
-              <StatCard icon={ShieldCheck}label="Admins"    value={stats.totalAdmins} color="bg-purple-500"  />
-              <StatCard icon={UserCheck}  label="Staff"     value={stats.totalStaff}  color="bg-indigo-500"  />
-              <StatCard icon={BedDouble}  label="ຫ້ອງພັກ"  value={stats.totalRooms}  color="bg-emerald-500" />
+              <StatCard icon={Users}      label={t("users")}     value={stats.totalUsers}  color="bg-blue-500"    />
+              <StatCard icon={ShieldCheck}label={t("admins")}    value={stats.totalAdmins} color="bg-purple-500"  />
+              <StatCard icon={UserCheck}  label={t("staff")}     value={stats.totalStaff}  color="bg-indigo-500"  />
+              <StatCard icon={BedDouble}  label={t("rooms")}  value={stats.totalRooms}  color="bg-emerald-500" />
             </div>
           </>
         )}
@@ -109,11 +111,11 @@ export default function SuperAdminDashboard() {
         {stats?.recentLogs && stats.recentLogs.length > 0 && (
           <div className="mt-8">
             <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              Access Logs ລ່າສຸດ
+              {t("latestAccessLogs")}
             </p>
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="grid grid-cols-[1fr_120px_120px_120px] gap-2 px-5 py-3 border-b border-gray-100 bg-gray-50/60">
-                {["User","Role","Login","IP"].map((h, i) => (
+                {[t("users"), t("role"), t("login"), t("ipAddress")].map((h, i) => (
                   <p key={i} className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{h}</p>
                 ))}
               </div>

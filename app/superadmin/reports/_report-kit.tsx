@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation"
 import { ArrowLeft, Download, Loader2, Printer, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { SuperAdminSidebar } from "@/components/superadmin-sidebar"
+import { useLanguage } from "@/components/language-provider"
 
 export interface ReportData {
   range: { from: string; to: string }
@@ -107,6 +108,7 @@ export function ReportShell({
 }) {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useLanguage()
 
   const [data, setData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -171,7 +173,7 @@ export function ReportShell({
               className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] text-gray-700 outline-none" />
             <button onClick={fetchReports}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-[12px] font-semibold text-white hover:bg-blue-700">
-              <RefreshCw size={13} /> Run
+              <RefreshCw size={13} /> {t("run")}
             </button>
             <button onClick={() => data && downloadReportCsv(data, slug)} disabled={!data}
               className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
@@ -179,7 +181,7 @@ export function ReportShell({
             </button>
             <button onClick={() => window.print()} disabled={!data}
               className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
-              <Printer size={13} /> Print
+              <Printer size={13} /> {t("print")}
             </button>
           </div>
         </div>
@@ -213,6 +215,7 @@ export function BarChart({
   data: { label: string; value: number }[]
   format?: (value: number) => string
 }) {
+  const { t } = useLanguage()
   const max = Math.max(1, ...data.map((item) => item.value))
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -220,7 +223,7 @@ export function BarChart({
         <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{title}</p>
       </div>
       {data.length === 0 ? (
-        <div className="py-10 text-center text-gray-400 text-[13px]">No data</div>
+        <div className="py-10 text-center text-gray-400 text-[13px]">{t("noData")}</div>
       ) : (
         <div className="p-5 space-y-2.5">
           {data.map((item) => (
@@ -247,6 +250,9 @@ export function DataTable({
   rows: ReactNode[][]
   empty?: string
 }) {
+  const { t } = useLanguage()
+  const emptyText = empty === "No data" ? t("noData") : empty
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-100 bg-blue-50/60 flex items-center justify-between">
@@ -254,7 +260,7 @@ export function DataTable({
         <span className="text-[11px] text-gray-500">{rows.length} ລາຍການ</span>
       </div>
       {rows.length === 0 ? (
-        <div className="py-12 text-center text-gray-400 text-[13px]">{empty}</div>
+        <div className="py-12 text-center text-gray-400 text-[13px]">{emptyText}</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -282,13 +288,15 @@ export function DataTable({
 }
 
 export function SummaryTable({ title, rows }: { title: string; rows: [string, string | number][] }) {
+  const { t } = useLanguage()
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
         <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{title}</p>
       </div>
       {rows.length === 0 ? (
-        <div className="py-10 text-center text-gray-400 text-[13px]">No data</div>
+        <div className="py-10 text-center text-gray-400 text-[13px]">{t("noData")}</div>
       ) : (
         <div className="divide-y divide-gray-50">
           {rows.map(([label, value]) => (

@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { AdminSidebar } from "@/components/admin-sidebar"
 import { ProfileMenu } from "@/components/profile-menu"
+import { TranslationKey, useLanguage } from "@/components/language-provider"
 
 // ── Types ────────────────────────────────────────────────────────
 type BookingStatus = "PENDING"|"CONFIRMED"|"CHECKED_IN"|"CHECKED_OUT"|"COMPLETED"|"CANCELLED"|"NO_SHOW"
@@ -38,36 +39,36 @@ interface Booking {
 }
 
 // ── Config ───────────────────────────────────────────────────────
-const ST_CFG: Record<BookingStatus, { label: string; color: string; dot: string }> = {
-  PENDING:     { label: "ລໍຖ້າ",      color: "bg-yellow-100 text-yellow-700",  dot: "bg-yellow-400"  },
-  CONFIRMED:   { label: "ຢືນຢັນ",     color: "bg-blue-100   text-blue-700",    dot: "bg-blue-500"    },
-  CHECKED_IN:  { label: "Check-in",   color: "bg-purple-100 text-purple-700",  dot: "bg-purple-500"  },
-  CHECKED_OUT: { label: "Check-out",  color: "bg-indigo-100 text-indigo-700",  dot: "bg-indigo-500"  },
-  COMPLETED:   { label: "ສຳເລັດ",     color: "bg-green-100  text-green-700",   dot: "bg-green-500"   },
-  CANCELLED:   { label: "ຍົກເລີກ",    color: "bg-red-100    text-red-600",     dot: "bg-red-400"     },
-  NO_SHOW:     { label: "ບໍ່ມາ",      color: "bg-orange-100 text-orange-700",  dot: "bg-orange-400"  },
+const ST_CFG: Record<BookingStatus, { labelKey: TranslationKey; color: string; dot: string }> = {
+  PENDING:     { labelKey: "statusPending",    color: "bg-yellow-100 text-yellow-700",  dot: "bg-yellow-400"  },
+  CONFIRMED:   { labelKey: "statusConfirmed",  color: "bg-blue-100   text-blue-700",    dot: "bg-blue-500"    },
+  CHECKED_IN:  { labelKey: "statusCheckedIn",  color: "bg-purple-100 text-purple-700",  dot: "bg-purple-500"  },
+  CHECKED_OUT: { labelKey: "statusCheckedOut", color: "bg-indigo-100 text-indigo-700",  dot: "bg-indigo-500"  },
+  COMPLETED:   { labelKey: "statusCompleted",  color: "bg-green-100  text-green-700",   dot: "bg-green-500"   },
+  CANCELLED:   { labelKey: "statusCancelled",  color: "bg-red-100    text-red-600",     dot: "bg-red-400"     },
+  NO_SHOW:     { labelKey: "statusNoShow",     color: "bg-orange-100 text-orange-700",  dot: "bg-orange-400"  },
 }
-const PAY_CFG: Record<PaymentStatus, { label: string; color: string }> = {
-  PENDING:        { label: "ຍັງບໍ່ຊຳລະ",    color: "text-gray-500"   },
-  PENDING_VERIFY: { label: "ລໍຕຮວດ slip",  color: "text-orange-500" },
-  PAID:           { label: "ຊຳລະແລ້ວ",     color: "text-green-600"  },
-  FAILED:         { label: "ຊຳລະຜິດ",      color: "text-red-500"    },
-  REFUNDED:       { label: "ຄືນເງິນແລ້ວ",  color: "text-blue-500"   },
+const PAY_CFG: Record<PaymentStatus, { labelKey: TranslationKey; color: string }> = {
+  PENDING:        { labelKey: "statusPending",  color: "text-gray-500"   },
+  PENDING_VERIFY: { labelKey: "pendingPaymentVerify", color: "text-orange-500" },
+  PAID:           { labelKey: "paid",           color: "text-green-600"  },
+  FAILED:         { labelKey: "statusRejected", color: "text-red-500"    },
+  REFUNDED:       { labelKey: "refunded",       color: "text-blue-500"   },
 }
 const DOC_TYPE_LABEL: Record<string, string> = {
   ID_CARD:  "ບັດປະຊາຊົນ",
   PASSPORT: "ພາສປອດ",
   OTHER:    "ອື່ນໆ",
 }
-const TRANSITIONS: Record<BookingStatus, { status: BookingStatus; label: string; color: string; icon: React.ElementType }[]> = {
-  PENDING:     [{ status:"CONFIRMED",  label:"ຢືນຢັນ",   color:"text-blue-600",   icon:CheckCircle2 },
-                { status:"NO_SHOW",    label:"ບໍ່ມາ",    color:"text-orange-500", icon:UserX        },
-                { status:"CANCELLED",  label:"ຍົກເລີກ",  color:"text-red-500",    icon:XCircle      }],
-  CONFIRMED:   [{ status:"CHECKED_IN", label:"Check-in", color:"text-purple-600", icon:LogIn        },
-                { status:"NO_SHOW",    label:"ບໍ່ມາ",    color:"text-orange-500", icon:UserX        },
-                { status:"CANCELLED",  label:"ຍົກເລີກ",  color:"text-red-500",    icon:XCircle      }],
-  CHECKED_IN:  [{ status:"CHECKED_OUT",label:"Check-out",color:"text-indigo-600", icon:LogOutIcon   }],
-  CHECKED_OUT: [{ status:"COMPLETED",  label:"ສຳເລັດ",   color:"text-green-600",  icon:CheckCircle2 }],
+const TRANSITIONS: Record<BookingStatus, { status: BookingStatus; labelKey: TranslationKey; color: string; icon: React.ElementType }[]> = {
+  PENDING:     [{ status:"CONFIRMED",  labelKey:"statusConfirmed",  color:"text-blue-600",   icon:CheckCircle2 },
+                { status:"NO_SHOW",    labelKey:"statusNoShow",     color:"text-orange-500", icon:UserX        },
+                { status:"CANCELLED",  labelKey:"statusCancelled",  color:"text-red-500",    icon:XCircle      }],
+  CONFIRMED:   [{ status:"CHECKED_IN", labelKey:"statusCheckedIn",  color:"text-purple-600", icon:LogIn        },
+                { status:"NO_SHOW",    labelKey:"statusNoShow",     color:"text-orange-500", icon:UserX        },
+                { status:"CANCELLED",  labelKey:"statusCancelled",  color:"text-red-500",    icon:XCircle      }],
+  CHECKED_IN:  [{ status:"CHECKED_OUT",labelKey:"statusCheckedOut", color:"text-indigo-600", icon:LogOutIcon   }],
+  CHECKED_OUT: [{ status:"COMPLETED",  labelKey:"statusCompleted",  color:"text-green-600",  icon:CheckCircle2 }],
   COMPLETED:   [],
   CANCELLED:   [],
   NO_SHOW:     [],
@@ -75,6 +76,7 @@ const TRANSITIONS: Record<BookingStatus, { status: BookingStatus; label: string;
 
 // ── Detail Modal ─────────────────────────────────────────────────
 function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onClose: () => void; onUpdated: () => void }) {
+  const { t } = useLanguage()
   const [saving,       setSaving]       = useState<string|null>(null)
   const [verifying,    setVerifying]    = useState(false)
   const [remarks,      setRemarks]      = useState("")
@@ -188,7 +190,7 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
         <button onClick={onClose} className="absolute top-5 right-5 text-gray-400 hover:text-gray-600"><X size={18} /></button>
 
         <div className="flex items-center gap-3 mb-5">
-          <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${stCfg.color}`}>{stCfg.label}</span>
+          <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${stCfg.color}`}>{t(stCfg.labelKey)}</span>
           <p className="text-[11px] text-gray-500 font-mono">{booking.id.slice(-8).toUpperCase()}</p>
         </div>
 
@@ -238,7 +240,7 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
             </p>
             <div className="flex items-center justify-between">
               <span className={`text-[12px] font-semibold ${PAY_CFG[tx.status].color}`}>
-                {PAY_CFG[tx.status].label}
+                {t(PAY_CFG[tx.status].labelKey)}
               </span>
               <span className="text-[12px] font-mono text-gray-700">{Number(tx.amount).toLocaleString()} ₭</span>
             </div>
@@ -411,7 +413,7 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
         {/* Action buttons */}
         {TRANSITIONS[booking.status].length > 0 && (
           <div className="flex gap-2">
-            {TRANSITIONS[booking.status].map(({ status, label, icon: Icon }) => (
+            {TRANSITIONS[booking.status].map(({ status, labelKey, icon: Icon }) => (
               <button key={status} disabled={!!saving}
                 onClick={() => {
                   // No-show เป็นสถานะสิ้นสุด (ย้อนไม่ได้) → ยืนยันก่อน
@@ -427,7 +429,7 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
                     : "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"}
                   disabled:opacity-50 transition-all`}>
                 <Icon size={13} />
-                {saving === status ? "ກຳລັງ..." : label}
+                {saving === status ? "ກຳລັງ..." : t(labelKey)}
               </button>
             ))}
           </div>
@@ -445,6 +447,7 @@ function BookingDetail({ booking, onClose, onUpdated }: { booking: Booking; onCl
 export default function SchedulePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useLanguage()
 
   const [bookings,  setBookings]  = useState<Booking[]>([])
   const [loading,   setLoading]   = useState(true)
@@ -505,7 +508,7 @@ export default function SchedulePage() {
 
       <main className="ml-[210px] flex-1 flex flex-col">
         <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-30">
-          <h1 className="text-[14px] font-bold text-gray-900">ຈັດການການຈອງ</h1>
+          <h1 className="text-[14px] font-bold text-gray-900">{t("bookingManagement")}</h1>
           <ProfileMenu />
         </header>
 
@@ -517,7 +520,7 @@ export default function SchedulePage() {
                 className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors flex items-center gap-1.5
                   ${filterSt === s ? "bg-[#0B2447] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                 {s !== "ALL" && <span className={`w-1.5 h-1.5 rounded-full ${ST_CFG[s].dot}`} />}
-                {s === "ALL" ? "ທັງໝົດ" : ST_CFG[s].label}
+                {s === "ALL" ? t("all") : t(ST_CFG[s].labelKey)}
                 <span className="opacity-60">({counts[s as keyof typeof counts] ?? bookings.length})</span>
               </button>
             ))}
@@ -562,7 +565,7 @@ export default function SchedulePage() {
                         <p className="text-[11px] text-gray-500 truncate">{b.user.email}</p>
                         {tx && (
                           <p className={`text-[11px] font-semibold mt-0.5 ${PAY_CFG[tx.status].color}`}>
-                            {PAY_CFG[tx.status].label}
+                            {t(PAY_CFG[tx.status].labelKey)}
                           </p>
                         )}
                       </div>
@@ -576,7 +579,7 @@ export default function SchedulePage() {
                       <div className="flex items-center gap-1.5">
                         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
                         <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.color}`}>
-                          {st.label}
+                          {t(st.labelKey)}
                         </span>
                       </div>
                       <div className="relative flex justify-end">
@@ -591,7 +594,7 @@ export default function SchedulePage() {
                               📋 ລາຍລະອຽດ
                             </button>
                             {/* Check-in ต้องผ่านโมดัล (เก็บเอกสาร) → ตัดออกจาก quick-action */}
-                            {TRANSITIONS[b.status].filter(({ status: ns }) => ns !== "CHECKED_IN").map(({ status: ns, label, color }) => (
+                            {TRANSITIONS[b.status].filter(({ status: ns }) => ns !== "CHECKED_IN").map(({ status: ns, labelKey, color }) => (
                               <button key={ns}
                                 onClick={async () => {
                                   setOpenDrop(null)
@@ -605,7 +608,7 @@ export default function SchedulePage() {
                                   fetchBookings()
                                 }}
                                 className={`w-full text-left px-4 py-2 text-[12px] hover:bg-gray-50 font-medium ${color}`}>
-                                {label}
+                                {t(labelKey)}
                               </button>
                             ))}
                             {/* ปุ่มลัดเปิดโมดัลเพื่อ Check-in พร้อมเอกสาร */}

@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { AdminSidebar } from "@/components/admin-sidebar"
 import { ProfileMenu } from "@/components/profile-menu"
+import { TranslationKey, useLanguage } from "@/components/language-provider"
 
 // ── Types ────────────────────────────────────────────────────────
 interface Stats {
@@ -27,13 +28,13 @@ interface Stats {
 }
 
 // ── Status helpers ───────────────────────────────────────────────
-const BOOKING_STATUS: Record<string, { label: string; color: string }> = {
-  PENDING:     { label: "ລໍຖ້າ",       color: "bg-yellow-100 text-yellow-700" },
-  CONFIRMED:   { label: "ຢືນຢັນ",      color: "bg-blue-100   text-blue-700"   },
-  CHECKED_IN:  { label: "Check-in",    color: "bg-purple-100 text-purple-700" },
-  CHECKED_OUT: { label: "Check-out",   color: "bg-indigo-100 text-indigo-700" },
-  COMPLETED:   { label: "ສຳເລັດ",      color: "bg-green-100  text-green-700"  },
-  CANCELLED:   { label: "ຍົກເລີກ",     color: "bg-red-100    text-red-600"    },
+const BOOKING_STATUS: Record<string, { labelKey: TranslationKey; color: string }> = {
+  PENDING:     { labelKey: "statusPending",    color: "bg-yellow-100 text-yellow-700" },
+  CONFIRMED:   { labelKey: "statusConfirmed",  color: "bg-blue-100   text-blue-700"   },
+  CHECKED_IN:  { labelKey: "statusCheckedIn",  color: "bg-purple-100 text-purple-700" },
+  CHECKED_OUT: { labelKey: "statusCheckedOut", color: "bg-indigo-100 text-indigo-700" },
+  COMPLETED:   { labelKey: "statusCompleted",  color: "bg-green-100  text-green-700"  },
+  CANCELLED:   { labelKey: "statusCancelled",  color: "bg-red-100    text-red-600"    },
 }
 
 // ── Stat Card ────────────────────────────────────────────────────
@@ -65,6 +66,7 @@ function StatCard({
 export default function AdminDashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useLanguage()
   const [stats,   setStats]   = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -106,16 +108,16 @@ export default function AdminDashboard() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
+            <h1 className="text-xl font-bold text-gray-900">{t("dashboard")}</h1>
             <p className="text-[12px] text-gray-500 mt-0.5">
-              ສະບາຍດີ, {session?.user?.name ?? session?.user?.email} · {new Date().toLocaleDateString("lo-LA", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+              {t("greeting")}, {session?.user?.name ?? session?.user?.email} · {new Date().toLocaleDateString("lo-LA", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
             </p>
           </div>
           <div className="flex items-center gap-3">
           {(payments.pendingVerify > 0 || bookings.pending > 0 || misc.pendingReviews > 0) && (
             <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-700 px-3 py-1.5 rounded-lg text-[12px]">
               <AlertCircle size={13} />
-              ມີລາຍການລໍຖ້າ {payments.pendingVerify + bookings.pending + misc.pendingReviews} ລາຍການ
+              {t("pendingItems")} {payments.pendingVerify + bookings.pending + misc.pendingReviews} {t("items")}
             </div>
           )}
             <ProfileMenu />
@@ -123,44 +125,44 @@ export default function AdminDashboard() {
         </div>
 
         {/* Row 1 — Room stats */}
-        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">ສະຖານະຫ້ອງ</p>
+        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">{t("roomOverview")}</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <StatCard icon={BedDouble}    label="ຫ້ອງທັງໝົດ"  value={rooms.total}       sub={`In use now ${occupancyPct}%`} color="bg-slate-500"  href={roomHref} />
-          <StatCard icon={CheckCircle2} label="ຫ້ອງວ່າງ"    value={rooms.available}   color="bg-green-500"  href={roomHref} />
-          <StatCard icon={Users}        label="ມີຜູ້ພັກ"    value={rooms.occupied}    color="bg-blue-500"   href={roomHref} />
-          <StatCard icon={AlertCircle}  label="ສ້ອມແປງ"     value={rooms.maintenance} color="bg-orange-400" href={roomHref} />
+          <StatCard icon={BedDouble}    label={t("totalRooms")}  value={rooms.total}       sub={`${t("inUseNow")} ${occupancyPct}%`} color="bg-slate-500"  href={roomHref} />
+          <StatCard icon={CheckCircle2} label={t("statusAvailable")}    value={rooms.available}   color="bg-green-500"  href={roomHref} />
+          <StatCard icon={Users}        label={t("statusOccupied")}    value={rooms.occupied}    color="bg-blue-500"   href={roomHref} />
+          <StatCard icon={AlertCircle}  label={t("statusMaintenance")}     value={rooms.maintenance} color="bg-orange-400" href={roomHref} />
         </div>
 
         {/* Row 2 — Booking stats */}
-        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">ການຈອງ</p>
+        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">{t("bookingOverview")}</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <StatCard icon={Clock}        label="ລໍຢືນຢັນ"    value={bookings.pending}   color="bg-yellow-500" alert={bookings.pending > 0}   href="/schedule" />
-          <StatCard icon={CalendarDays} label="Check-in ວັນນີ້"  value={bookings.todayCheckIns}  color="bg-purple-500" href="/schedule" />
-          <StatCard icon={ArrowDownRight} label="Check-out ວັນນີ້" value={bookings.todayCheckOuts} color="bg-indigo-500" href="/schedule" />
-          <StatCard icon={XCircle}      label="ຍົກເລີກ"     value={bookings.cancelled} color="bg-red-400"    href="/schedule" />
+          <StatCard icon={Clock}        label={t("statusPending")}    value={bookings.pending}   color="bg-yellow-500" alert={bookings.pending > 0}   href="/schedule" />
+          <StatCard icon={CalendarDays} label={t("todayCheckIn")}  value={bookings.todayCheckIns}  color="bg-purple-500" href="/schedule" />
+          <StatCard icon={ArrowDownRight} label={t("todayCheckOut")} value={bookings.todayCheckOuts} color="bg-indigo-500" href="/schedule" />
+          <StatCard icon={XCircle}      label={t("statusCancelled")}     value={bookings.cancelled} color="bg-red-400"    href="/schedule" />
         </div>
 
         {/* Row 3 — Revenue + misc */}
-        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">ການເງິນ & ອື່ນໆ</p>
+        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-3">{t("financeOther")}</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <StatCard icon={TrendingUp}   label="ລາຍໄດ້ເດືອນນີ້"
+          <StatCard icon={TrendingUp}   label={t("monthlyRevenue")}
             value={`${payments.monthRevenue.toLocaleString()} ₭`}
             color="bg-emerald-500" />
-          <StatCard icon={CreditCard}   label="ລໍຢືນຢັນຊຳລະ"
+          <StatCard icon={CreditCard}   label={t("pendingPaymentVerify")}
             value={payments.pendingVerify}
             color="bg-pink-500" alert={payments.pendingVerify > 0} href="/schedule" />
-          <StatCard icon={Star}         label="ລີວິວລໍກວດ"
+          <StatCard icon={Star}         label={t("pendingReviews")}
             value={misc.pendingReviews}
             color="bg-cyan-500" alert={misc.pendingReviews > 0} href="/review" />
-          <StatCard icon={Users}        label="ຜູ້ໃຊ້ລະບົບ"
+          <StatCard icon={Users}        label={t("systemUsers")}
             value={misc.totalUsers}
-            sub={`Staff ${misc.totalStaff} ຄົນ`} color="bg-slate-400" />
+            sub={`${t("staff")} ${misc.totalStaff} ${t("people")}`} color="bg-slate-400" />
         </div>
 
         {/* Occupancy bar */}
         <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm mb-8">
           <div className="flex justify-between items-center mb-3">
-            <p className="text-[13px] font-semibold text-gray-800">Occupancy Rate (now)</p>
+            <p className="text-[13px] font-semibold text-gray-800">{t("occupancyRate")} ({t("inUseNow")})</p>
             <p className="text-[13px] font-bold text-blue-600">{occupancyPct}%</p>
           </div>
           <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -169,10 +171,10 @@ export default function AdminDashboard() {
           </div>
           <div className="flex gap-5 mt-3">
             {[
-              { label: "ວ່າງ",     value: rooms.available,    color: "bg-green-400"  },
-              { label: "ມີຜູ້ພັກ", value: rooms.occupied,     color: "bg-blue-400"   },
-              { label: "Reserved", value: rooms.reserved,     color: "bg-purple-400" },
-              { label: "ສ້ອມແປງ",  value: rooms.maintenance,  color: "bg-orange-400" },
+              { label: t("statusAvailable"), value: rooms.available,    color: "bg-green-400"  },
+              { label: t("statusOccupied"), value: rooms.occupied,     color: "bg-blue-400"   },
+              { label: t("statusReserved"), value: rooms.reserved,     color: "bg-purple-400" },
+              { label: t("statusMaintenance"),  value: rooms.maintenance,  color: "bg-orange-400" },
             ].map(({ label, value, color }) => (
               <div key={label} className="flex items-center gap-1.5 text-[11px] text-gray-500">
                 <span className={`w-2.5 h-2.5 rounded-full ${color}`} />
@@ -185,13 +187,13 @@ export default function AdminDashboard() {
         {/* Booking summary row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
           {[
-            { label: "PENDING",     val: bookings.pending,    bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200" },
-            { label: "CONFIRMED",   val: bookings.confirmed,  bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200"   },
-            { label: "CHECK-IN",    val: bookings.checkedIn,  bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
-            { label: "CHECK-OUT",   val: bookings.checkedOut, bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200" },
-            { label: "COMPLETED",   val: bookings.completed,  bg: "bg-green-50",  text: "text-green-700",  border: "border-green-200"  },
-            { label: "CANCELLED",   val: bookings.cancelled,  bg: "bg-red-50",    text: "text-red-600",    border: "border-red-200"    },
-            { label: "NO-SHOW",     val: bookings.noShow,     bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" },
+            { label: t("statusPending"),     val: bookings.pending,    bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200" },
+            { label: t("statusConfirmed"),   val: bookings.confirmed,  bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200"   },
+            { label: t("statusCheckedIn"),    val: bookings.checkedIn,  bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
+            { label: t("statusCheckedOut"),   val: bookings.checkedOut, bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200" },
+            { label: t("statusCompleted"),   val: bookings.completed,  bg: "bg-green-50",  text: "text-green-700",  border: "border-green-200"  },
+            { label: t("statusCancelled"),   val: bookings.cancelled,  bg: "bg-red-50",    text: "text-red-600",    border: "border-red-200"    },
+            { label: t("statusNoShow"),     val: bookings.noShow,     bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" },
           ].map(({ label, val, bg, text, border }) => (
             <div key={label} className={`${bg} ${border} border rounded-xl p-4 text-center`}>
               <p className={`text-[22px] font-bold ${text}`}>{val}</p>
@@ -203,27 +205,27 @@ export default function AdminDashboard() {
         {/* Recent bookings table */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <p className="text-[13px] font-semibold text-gray-800">ການຈອງລ່າສຸດ</p>
+            <p className="text-[13px] font-semibold text-gray-800">{t("recentBookings")}</p>
             <Link href="/schedule" className="text-[11px] text-blue-500 hover:underline flex items-center gap-1">
-              ເບິ່ງທັງໝົດ <ArrowUpRight size={11} />
+              {t("viewAll")} <ArrowUpRight size={11} />
             </Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="bg-gray-50 text-left">
-                  <th className="px-5 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">ຜູ້ຈອງ</th>
-                  <th className="px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">ຫ້ອງ</th>
-                  <th className="px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">ວັນທີ</th>
-                  <th className="px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">ລາຄາ</th>
-                  <th className="px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">ສະຖານະ</th>
+                  <th className="px-5 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">{t("booker")}</th>
+                  <th className="px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">{t("room")}</th>
+                  <th className="px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">{t("date")}</th>
+                  <th className="px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">{t("price")}</th>
+                  <th className="px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">{t("status")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {recentBookings.length === 0 ? (
-                  <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-500">ຍັງບໍ່ມີການຈອງ</td></tr>
+                  <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-500">{t("noBookingsYet")}</td></tr>
                 ) : recentBookings.map((b) => {
-                  const st  = BOOKING_STATUS[b.status] ?? { label: b.status, color: "bg-gray-100 text-gray-600" }
+                  const st  = BOOKING_STATUS[b.status]
                   const cin = new Date(b.checkIn).toLocaleDateString("lo-LA",  { day: "2-digit", month: "short" })
                   const cout= new Date(b.checkOut).toLocaleDateString("lo-LA", { day: "2-digit", month: "short" })
                   const name= [b.user.name, b.user.lastName].filter(Boolean).join(" ") || b.user.email
@@ -237,8 +239,8 @@ export default function AdminDashboard() {
                       <td className="px-4 py-3 text-gray-500">{cin} – {cout}</td>
                       <td className="px-4 py-3 font-medium text-gray-800">{Number(b.totalPrice).toLocaleString()} ₭</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${st.color}`}>
-                          {st.label}
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${st?.color ?? "bg-gray-100 text-gray-600"}`}>
+                          {st ? t(st.labelKey) : b.status}
                         </span>
                       </td>
                     </tr>

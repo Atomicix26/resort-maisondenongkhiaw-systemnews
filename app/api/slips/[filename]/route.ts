@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 import { readFile } from "fs/promises"
 import path from "path"
 
@@ -11,12 +12,6 @@ export async function GET(
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-  }
-
-  const isAdmin =
-    session.user.role === "ADMIN" || session.user.role === "SUPERADMIN"
-  if (!isAdmin) {
-    return NextResponse.json({ message: "Forbidden" }, { status: 403 })
   }
 
   const { filename } = await params
@@ -31,6 +26,21 @@ export async function GET(
   const ext = filename.split(".").pop()?.toLowerCase() ?? ""
   if (!allowedExt.has(ext)) {
     return NextResponse.json({ message: "Invalid file type" }, { status: 400 })
+  }
+
+  const isAdmin =
+    session.user.role === "ADMIN" || session.user.role === "SUPERADMIN"
+  if (!isAdmin) {
+    const ownSlip = await prisma.paymentTransaction.findFirst({
+      where: {
+        slipImage: filename,
+        booking: { userId: session.user.id, deletedAt: null },
+      },
+      select: { id: true },
+    })
+    if (!ownSlip) {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 })
+    }
   }
 
   try {

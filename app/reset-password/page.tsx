@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation"
 
 function ResetPasswordForm() {
   const params = useSearchParams()
-  const email = params.get("email") || ""
+  const email = params?.get("email") || ""
   const router = useRouter()
 
   const [otp, setOtp] = useState("")

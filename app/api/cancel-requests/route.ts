@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { computeRefund } from "@/lib/refund"
 import { nextId } from "@/lib/ids"
+import { saveImageUpload } from "@/lib/upload"
 
 // POST — User ส่งคำขอยกเลิก
 export async function POST(request: NextRequest) {
@@ -12,17 +13,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
   }
 
-  let body: {
-    bookingId?: string; reason?: string
-    refundBankName?: string; refundAccountName?: string; refundAccountNumber?: string
-  }
+  let bookingId = ""
+  let reason = ""
+  let refundBankName = ""
+  let refundAccountName = ""
+  let refundAccountNumber = ""
+  let refundQrFile: File | null = null
   try {
-    body = await request.json()
+    const contentType = request.headers.get("content-type") ?? ""
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData()
+      bookingId = String(formData.get("bookingId") ?? "")
+      reason = String(formData.get("reason") ?? "")
+      refundBankName = String(formData.get("refundBankName") ?? "")
+      refundAccountName = String(formData.get("refundAccountName") ?? "")
+      refundAccountNumber = String(formData.get("refundAccountNumber") ?? "")
+      const qr = formData.get("refundQrFile")
+      refundQrFile = qr instanceof File ? qr : null
+    } else {
+      const body = await request.json()
+      bookingId = String(body.bookingId ?? "")
+      reason = String(body.reason ?? "")
+      refundBankName = String(body.refundBankName ?? "")
+      refundAccountName = String(body.refundAccountName ?? "")
+      refundAccountNumber = String(body.refundAccountNumber ?? "")
+    }
   } catch {
     return NextResponse.json({ message: "Invalid body" }, { status: 400 })
   }
-
-  const { bookingId, reason } = body
 
   if (!bookingId || !reason?.trim()) {
     return NextResponse.json({ message: "ກະລຸນາລະບຸ Booking ແລະ ເຫດຜົນ" }, { status: 400 })
@@ -73,14 +91,23 @@ export async function POST(request: NextRequest) {
       : { percent: 0, amount: 0 }
 
     // ต้องมีบัญชีรับเงินคืน ถ้ามียอดต้องคืน (ไม่มี payment gateway → โอนคืนมือ)
-    const bankName = body.refundBankName?.trim()
-    const accName  = body.refundAccountName?.trim()
-    const accNo    = body.refundAccountNumber?.trim()
+    const bankName = refundBankName?.trim()
+    const accName  = refundAccountName?.trim()
+    const accNo    = refundAccountNumber?.trim()
     if (amount > 0 && (!bankName || !accName || !accNo)) {
       return NextResponse.json(
         { message: "ກະລຸນາລະບຸ ທะນາຄານ / ຊື່ບັນຊີ / ເລກບັນຊີ ສຳລັບຮັບເງິນຄືນ" },
         { status: 400 }
       )
+    }
+
+    let refundQrImage: string | null = null
+    if (refundQrFile instanceof File && refundQrFile.size > 0) {
+      const saved = await saveImageUpload(refundQrFile, "payment-slips", "refund_qr")
+      if (!saved.ok) {
+        return NextResponse.json({ message: saved.error }, { status: 400 })
+      }
+      refundQrImage = saved.filename
     }
 
     const cancelReq = await prisma.cancelRequest.create({
@@ -93,11 +120,19 @@ export async function POST(request: NextRequest) {
         refundable:          hasRefund,
         refundPercent:       hasRefund ? percent : null,
         refundAmount:        hasRefund ? amount  : null,
-        refundBankName:      amount > 0 ? bankName : null,
-        refundAccountName:   amount > 0 ? accName  : null,
-        refundAccountNumber: amount > 0 ? accNo    : null,
+        refundBankName:      bankName || null,
+        refundAccountName:   accName  || null,
+        refundAccountNumber: accNo    || null,
       },
     })
+
+    if (refundQrImage) {
+      await prisma.$executeRaw`
+        UPDATE cancel_requests
+        SET refundQrImage = ${refundQrImage}
+        WHERE id = ${cancelReq.id}
+      `
+    }
 
     return NextResponse.json({ cancelRequest: cancelReq }, { status: 201 })
 

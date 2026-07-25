@@ -109,7 +109,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
       // Log check-in พร้อมเอกสารยืนยันตัวตน (staffId เป็น null ได้ถ้า admin ไม่มี Staff profile)
       if (status === "CHECKED_IN" && actualCheckIn) {
-        await tx.checkInLog.create({
+        const checkInLog = await tx.checkInLog.create({
           data: {
             id:          nextId("checkInLog"),
             bookingId:   id,
@@ -123,12 +123,22 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             docImage:    docImageName,
           },
         })
+        await tx.$executeRaw`
+          UPDATE check_in_logs
+          SET performedByUserId = ${session.user.id}
+          WHERE id = ${checkInLog.id}
+        `
       }
       // Log check-out
-      if (actualCheckOut && staff) {
-        await tx.checkOutLog.create({
-          data: { id: nextId("checkOutLog"), bookingId: id, staffId: staff.id, actualTime: new Date(actualCheckOut), remarks: checkOutRemarks },
+      if (status === "CHECKED_OUT" && actualCheckOut) {
+        const checkOutLog = await tx.checkOutLog.create({
+          data: { id: nextId("checkOutLog"), bookingId: id, staffId: staff?.id ?? null, actualTime: new Date(actualCheckOut), remarks: checkOutRemarks },
         })
+        await tx.$executeRaw`
+          UPDATE check_out_logs
+          SET performedByUserId = ${session.user.id}
+          WHERE id = ${checkOutLog.id}
+        `
       }
 
       // เปลี่ยนสถานะห้องตาม booking status (ใช้ oldStatus จริงจาก DB เพื่อ audit ที่ถูกต้อง)

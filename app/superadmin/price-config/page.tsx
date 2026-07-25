@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Loader2, Plus, RefreshCw, X } from "lucide-react"
 import { SuperAdminSidebar } from "@/components/superadmin-sidebar"
 import { ProfileMenu } from "@/components/profile-menu"
+import { useLanguage } from "@/components/language-provider"
 
 interface RoomTypeOption {
   id: string
@@ -54,6 +55,7 @@ function PriceConfigModal({
   onClose: () => void
   onSaved: () => void
 }) {
+  const { t } = useLanguage()
   const [form, setForm] = useState<FormState>(
     initial
       ? {
@@ -111,59 +113,59 @@ function PriceConfigModal({
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-7 relative">
         <button onClick={onClose} className="absolute top-5 right-5 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-        <h2 className="text-[16px] font-bold text-gray-900 mb-5">{mode === "add" ? "Add Price Config" : "Edit Price Config"}</h2>
+        <h2 className="text-[16px] font-bold text-gray-900 mb-5">{mode === "add" ? t("addPriceConfig") : t("editPriceConfig")}</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="text-[11px] text-gray-600 font-semibold">Room Type *</label>
+            <label className="text-[11px] text-gray-600 font-semibold">{t("roomType")} *</label>
             <select value={form.roomTypeId} onChange={(event) => set("roomTypeId", event.target.value)}
               className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 bg-white outline-none focus:border-blue-400">
-              <option value="">Select room type</option>
+              <option value="">{t("selectRoomType")}</option>
               {roomTypes.map((item) => (
                 <option key={item.id} value={item.id}>{item.typeName}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="text-[11px] text-gray-600 font-semibold">Season Name *</label>
+            <label className="text-[11px] text-gray-600 font-semibold">{t("seasonName")} *</label>
             <input value={form.seasonName} onChange={(event) => set("seasonName", event.target.value)}
               placeholder="High Season"
               className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[11px] text-gray-600 font-semibold">Price *</label>
+              <label className="text-[11px] text-gray-600 font-semibold">{t("price")} *</label>
               <input type="number" value={form.priceAmount} onChange={(event) => set("priceAmount", event.target.value)}
                 className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
             </div>
             <div>
-              <label className="text-[11px] text-gray-600 font-semibold">Priority *</label>
+              <label className="text-[11px] text-gray-600 font-semibold">{t("priority")} *</label>
               <input type="number" value={form.priority} onChange={(event) => set("priority", event.target.value)}
                 className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[11px] text-gray-600 font-semibold">Start Date *</label>
+              <label className="text-[11px] text-gray-600 font-semibold">{t("startDate")} *</label>
               <input type="date" value={form.startDate} onChange={(event) => set("startDate", event.target.value)}
                 className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
             </div>
             <div>
-              <label className="text-[11px] text-gray-600 font-semibold">End Date *</label>
+              <label className="text-[11px] text-gray-600 font-semibold">{t("endDate")} *</label>
               <input type="date" value={form.endDate} onChange={(event) => set("endDate", event.target.value)}
                 className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
             </div>
           </div>
           <label className="flex items-center gap-2 text-[12px] text-gray-600">
             <input type="checkbox" checked={form.isActive} onChange={(event) => set("isActive", event.target.checked)} />
-            Active
+            {t("active")}
           </label>
           {error && <p className="text-[12px] text-red-500">{error}</p>}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-600 hover:bg-gray-50">Cancel</button>
+              className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-600 hover:bg-gray-50">{t("cancel")}</button>
             <button type="submit" disabled={saving}
               className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[13px] font-semibold disabled:opacity-50">
-              {saving ? "Saving..." : "Save"}
+              {saving ? t("saving") : t("save")}
             </button>
           </div>
         </form>
@@ -175,6 +177,7 @@ function PriceConfigModal({
 export default function PriceConfigPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useLanguage()
 
   const [configs, setConfigs] = useState<PriceConfig[]>([])
   const [roomTypes, setRoomTypes] = useState<RoomTypeOption[]>([])
@@ -216,7 +219,7 @@ export default function PriceConfigPage() {
   }, [status, fetchData])
 
   async function deactivate(id: string) {
-    if (!confirm("Deactivate this price config?")) return
+    if (!confirm(`${t("disable")} ${t("priceConfig")}?`)) return
     await fetch(`/api/superadmin/price-configs/${id}`, { method: "DELETE" })
     await fetchData()
   }
@@ -231,14 +234,14 @@ export default function PriceConfigPage() {
       <main className="ml-[210px] flex-1 p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-[20px] font-bold text-gray-900">Price Config</h1>
-            <p className="text-[12px] text-gray-500 mt-1">Seasonal pricing by room type. Higher priority wins.</p>
+            <h1 className="text-[20px] font-bold text-gray-900">{t("priceConfig")}</h1>
+            <p className="text-[12px] text-gray-500 mt-1">{t("priceConfigSubtitle")}</p>
           </div>
           <div className="flex gap-2">
             <button onClick={fetchData} className="p-2 bg-white border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50"><RefreshCw size={14} /></button>
             <button onClick={() => setModal({ mode: "add" })}
               className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-[12px] font-semibold">
-              <Plus size={13} /> Add Config
+              <Plus size={13} /> {t("add")}
             </button>
             <ProfileMenu />
           </div>
@@ -248,14 +251,14 @@ export default function PriceConfigPage() {
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="grid grid-cols-[1fr_140px_120px_120px_80px_90px_120px] gap-3 px-5 py-3 border-b border-gray-100 bg-gray-50/60">
-            {["Season", "Room Type", "Price", "Date Range", "Priority", "Status", ""].map((head) => (
+            {[t("season"), t("roomType"), t("price"), t("dateRange"), t("priority"), t("status"), ""].map((head) => (
               <p key={head} className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{head}</p>
             ))}
           </div>
           {loading ? (
             <div className="py-16 flex justify-center"><Loader2 size={24} className="text-blue-400 animate-spin" /></div>
           ) : configs.length === 0 ? (
-            <div className="py-16 text-center text-gray-400 text-[13px]">No price configs found</div>
+            <div className="py-16 text-center text-gray-400 text-[13px]">{t("noPriceConfigsFound")}</div>
           ) : (
             <div className="divide-y divide-gray-50">
               {configs.map((item) => (
@@ -266,14 +269,14 @@ export default function PriceConfigPage() {
                   <p className="text-[11px] text-gray-500">{item.startDate.slice(0, 10)} to {item.endDate.slice(0, 10)}</p>
                   <p className="text-[12px] text-gray-500">{item.priority}</p>
                   <span className={`w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                    {item.isActive ? "Active" : "Inactive"}
+                    {item.isActive ? t("active") : t("inactive")}
                   </span>
                   <div className="flex justify-end gap-2">
                     <button onClick={() => setModal({ mode: "edit", item })}
-                      className="px-3 py-1.5 rounded-lg bg-blue-50 text-[11px] font-semibold text-blue-600 hover:bg-blue-100">Edit</button>
+                      className="px-3 py-1.5 rounded-lg bg-blue-50 text-[11px] font-semibold text-blue-600 hover:bg-blue-100">{t("edit")}</button>
                     {item.isActive && (
                       <button onClick={() => deactivate(item.id)}
-                        className="px-3 py-1.5 rounded-lg bg-red-50 text-[11px] font-semibold text-red-500 hover:bg-red-100">Disable</button>
+                        className="px-3 py-1.5 rounded-lg bg-red-50 text-[11px] font-semibold text-red-500 hover:bg-red-100">{t("disable")}</button>
                     )}
                   </div>
                 </div>

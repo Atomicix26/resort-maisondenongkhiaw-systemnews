@@ -4,14 +4,16 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Prisma, RoomStatus } from "@prisma/client"
 import { nextId } from "@/lib/ids"
+import { expireStaleBookings } from "@/lib/expire"
 
-// GET /api/rooms — ดึงทุกห้อง (user + admin ใช้ร่วม)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const search   = searchParams.get("search")   ?? ""
+    const search   = searchParams.get("search") ?? ""
     const featured = searchParams.get("featured")
-    const all      = searchParams.get("all")       // admin ต้องการทุกห้อง
+    const all      = searchParams.get("all")
+    const checkIn  = searchParams.get("checkIn")
+    const checkOut = searchParams.get("checkOut")
 
     if (all === "true") {
       const session = await getServerSession(authOptions)
@@ -20,10 +22,22 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    let checkInDate: Date | null = null
+    let checkOutDate: Date | null = null
+    const hasDateRange = Boolean(checkIn && checkOut)
+    if (hasDateRange) {
+      checkInDate = new Date(checkIn!)
+      checkOutDate = new Date(checkOut!)
+      if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime()) || checkInDate >= checkOutDate) {
+        return NextResponse.json({ error: "Invalid date range" }, { status: 400 })
+      }
+      await expireStaleBookings()
+    }
+
     const rooms = await prisma.room.findMany({
       where: {
         deletedAt: null,
-        isActive:  all === "true" ? undefined : true,
+        isActive: all === "true" ? undefined : true,
         ...(featured === "true" ? { featured: true } : {}),
         ...(search ? {
           OR: [
@@ -54,14 +68,37 @@ export async function GET(request: NextRequest) {
     `
     const reviewsByRoom = new Map(reviewCounts.map((row) => [row.roomId, Number(row.count)]))
 
-    // parse JSON fields
-    const parsed = rooms.map((r) => ({
-      ...r,
-      price:     Number(r.price),
-      images:    tryParse(r.images as string | null,    []),
-      amenities: tryParse(r.amenities as string | null, []),
-      _count:    { ...r._count, reviews: reviewsByRoom.get(r.id) ?? 0 },
-    }))
+    const conflicts = hasDateRange && checkInDate && checkOutDate && rooms.length > 0
+      ? await prisma.booking.findMany({
+          where: {
+            deletedAt: null,
+            status: { notIn: ["CANCELLED", "NO_SHOW"] },
+            roomId: { in: rooms.map((room) => room.id) },
+            checkIn: { lt: checkOutDate },
+            checkOut: { gt: checkInDate },
+          },
+          select: { roomId: true },
+        })
+      : []
+    const bookedRoomIds = new Set(conflicts.map((booking) => booking.roomId))
+
+    const parsed = rooms.map((room) => {
+      const blockedByMaintenance = room.status === "MAINTENANCE"
+      const blockedByBooking = hasDateRange && bookedRoomIds.has(room.id)
+      return {
+        ...room,
+        price: Number(room.price),
+        images: tryParse(room.images as string | null, []),
+        amenities: tryParse(room.amenities as string | null, []),
+        available: !blockedByMaintenance && !blockedByBooking,
+        unavailableReason: blockedByMaintenance
+          ? "ປິດປັບປຸງ"
+          : blockedByBooking
+            ? "ບໍ່ວ່າງໃນຊ່ວງວັນທີນີ້"
+            : null,
+        _count: { ...room._count, reviews: reviewsByRoom.get(room.id) ?? 0 },
+      }
+    })
 
     return NextResponse.json(parsed)
   } catch (error) {
@@ -70,7 +107,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/rooms — สร้างห้องใหม่ (admin only)
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)

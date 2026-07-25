@@ -129,7 +129,7 @@ export default function VoucherPage({ params }: { params: Promise<{ id: string }
         <div className="bg-[#071A33] text-white px-8 py-6 flex items-start justify-between">
           <div>
             <p className="text-[11px] uppercase tracking-[0.2em] text-white/60 mb-1">ໃບຢືນຢັນການຈອງ / Booking Voucher</p>
-            <h1 className="text-[22px] font-extrabold tracking-wide">Resort MDNK1</h1>
+            <h1 className="text-[22px] font-extrabold tracking-wide">Resort Maison De Nongkhiaw</h1>
           </div>
           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${cfg.color}`}>
             <SIcon size={12} /> {cfg.label}
