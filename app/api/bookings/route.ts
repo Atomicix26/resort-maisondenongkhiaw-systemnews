@@ -14,6 +14,19 @@ import { expireStaleBookings, paymentDeadline } from "@/lib/expire";
 import { nextId } from "@/lib/ids";
 import { sendBookingConfirmation } from "@/lib/mail";
 
+// type ของผลลัพธ์ transaction — ใช้แทน unknown/any
+type BookingWithRelations = Prisma.BookingGetPayload<{
+  include: {
+    room: { select: { name: true; price: true; view: true } };
+    user: { select: { name: true; email: true } };
+  };
+}>;
+
+type BookingTxResult = {
+  booking: BookingWithRelations;
+  transaction: Prisma.PaymentTransactionGetPayload<Record<string, never>>;
+};
+
 // ── ตรวจว่า error เกิดจาก serialization/deadlock (ควร retry) ──────────
 // P2034 = Prisma: transaction failed due to write conflict or deadlock
 function isSerializationError(error: unknown): boolean {
@@ -120,7 +133,7 @@ export async function POST(request: NextRequest) {
     // → transaction คู่แข่งที่จองวันทับกัน insert ไม่ได้ จนกว่าจะ commit
     // หาก InnoDB เกิด deadlock/serialization → retry แล้วเช็คใหม่
     const MAX_ATTEMPTS = 3;
-    let result: { booking: unknown; transaction: unknown } | null = null;
+    let result: BookingTxResult | null = null;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
@@ -218,18 +231,17 @@ export async function POST(request: NextRequest) {
     if (!result) {
       throw new Error("ROOM_UNAVAILABLE");
     }
-    const booking = result.booking as any;
 
     try {
       await sendBookingConfirmation({
-        to: booking.user.email,
-        customerName: booking.user.name,
-        bookingId: booking.id,
-        roomName: booking.room.name,
-        checkIn: booking.checkIn.toLocaleDateString(),
-        checkOut: booking.checkOut.toLocaleDateString(),
-        guests: booking.guests,
-        totalPrice: Number(booking.totalPrice),
+        to: result.booking.user.email,
+        customerName: result.booking.user.name ?? "ລູກຄ້າ",
+        bookingId: result.booking.id,
+        roomName: result.booking.room.name,
+        checkIn: result.booking.checkIn.toLocaleDateString(),
+        checkOut: result.booking.checkOut.toLocaleDateString(),
+        guests: result.booking.guests,
+        totalPrice: Number(result.booking.totalPrice),
       });
     } catch (err) {
       console.error("Send booking email failed:", err);

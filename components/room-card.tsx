@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Image from "next/image"
 import { Bed, Users, Eye, Wifi, Wind } from "lucide-react"
 import type { TranslationKey } from "@/components/language-provider"
@@ -33,18 +33,13 @@ interface RoomCardProps {
 }
 
 export function RoomCard({ room, t, onChoose }: RoomCardProps) {
-  const [img,      setImg]      = useState(getRoomCover(room))
   const [fallback, setFallback] = useState(false)
 
-  // รีเซ็ตรูปเมื่อข้อมูล room เปลี่ยน (เช่น ค้นหาใหม่ / fetch ใหม่แต่ component ถูก reuse)
-  useEffect(() => {
-    setImg(getRoomCover(room))
-    setFallback(false)
-  }, [room])
+  // คำนวณตรงระหว่าง render แทนการเก็บใน state ผ่าน useEffect
+  const img = fallback ? "/room.png" : getRoomCover(room)
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-200 group">
-      {/* Image */}
       <div className="relative h-44 w-full overflow-hidden">
         <Image
           src={img}
@@ -56,10 +51,7 @@ export function RoomCard({ room, t, onChoose }: RoomCardProps) {
                  25vw"
           className="object-cover group-hover:scale-105 transition-transform duration-300"
           onError={() => {
-            if (!fallback) {
-              setFallback(true)
-              setImg("/room.png")
-            }
+            if (!fallback) setFallback(true)
           }}
         />
         {room.featured && (
@@ -72,12 +64,10 @@ export function RoomCard({ room, t, onChoose }: RoomCardProps) {
         </div>
       </div>
 
-      {/* Body */}
       <div className="p-4">
         <h3 className="text-[13px] font-bold text-gray-900 truncate">{room.name}</h3>
         <p className="text-[12px] text-gray-500 mt-0.5 truncate">{room.view}</p>
 
-        {/* Info row */}
         <div className="flex items-center gap-3.5 mt-2.5 text-[12px] font-medium text-gray-600">
           <span className="flex items-center gap-1">
             <Bed size={13} className="text-gray-500" /> {room.bedType}
@@ -92,7 +82,6 @@ export function RoomCard({ room, t, onChoose }: RoomCardProps) {
           )}
         </div>
 
-        {/* Amenities pills (max 3) */}
         {room.amenities.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-3">
             {room.amenities.slice(0, 3).map((a) => (
@@ -109,7 +98,6 @@ export function RoomCard({ room, t, onChoose }: RoomCardProps) {
           </div>
         )}
 
-        {/* CTA */}
         <button
           onClick={() => onChoose(room.id)}
           className="w-full mt-4 py-2.5 border-2 border-gray-800 rounded-lg text-[12px] font-bold text-gray-800 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all active:scale-95"
