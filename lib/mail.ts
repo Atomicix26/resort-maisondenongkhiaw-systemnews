@@ -1,8 +1,22 @@
 import { Resend } from "resend"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// lazy init: สร้าง client ตอนถูกเรียกใช้จริงเท่านั้น
+// กัน crash ตอน import module ถ้า RESEND_API_KEY ยังไม่ถูกตั้ง (เช่นตอนรัน test/CI)
+let resendClient: Resend | null = null
+
+function getResendClient(): Resend {
+  if (!resendClient) {
+    const apiKey = process.env.RESEND_API_KEY
+    if (!apiKey) {
+      throw new Error("RESEND_API_KEY is not set")
+    }
+    resendClient = new Resend(apiKey)
+  }
+  return resendClient
+}
 
 export async function sendOtpEmail(to: string, otp: string) {
+  const resend = getResendClient()
   await resend.emails.send({
     from: "Resort MDNK1 <noreply@yourdomain.com>",
     to,
@@ -41,6 +55,7 @@ export async function sendBookingConfirmation({
   guests: number
   totalPrice: number
 }) {
+  const resend = getResendClient()
   await resend.emails.send({
     from: "Resort Maison De Nongkhiaw <noreply@yourdomain.com>",
     to,
