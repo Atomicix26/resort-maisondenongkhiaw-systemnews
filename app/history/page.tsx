@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import Image from "next/image"
 import Link  from "next/link"
 import { useRouter } from "next/navigation"
@@ -8,9 +8,10 @@ import { useSession } from "next-auth/react"
 import {
   Search, Calendar, Bed, Users, ChevronRight,
   CheckCircle2, Clock, XCircle, AlertCircle,
-  CreditCard, Banknote, ArrowLeft, Loader2, X, Star, FileText,
+  CreditCard, Banknote, ArrowLeft, Loader2, X, Star, FileText, Upload,
 } from "lucide-react"
 import { computeRefund, REFUND_POLICY } from "@/lib/refund"
+import { useLanguage } from "@/components/language-provider"
 
 // ── Types ────────────────────────────────────────────────────────
 interface Transaction {
@@ -109,15 +110,35 @@ function CancelModal({ booking, onClose, onDone }: {
   const [bankName, setBankName] = useState("")
   const [accName,  setAccName]  = useState("")
   const [accNo,    setAccNo]    = useState("")
+  const [qrFile,   setQrFile]   = useState<File | null>(null)
+  const [qrPreview, setQrPreview] = useState("")
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState("")
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  // จ่ายมาแล้วเท่าไหร่ → คำนวณเงินคืนโดยประมาณตามนโยบายเวลา (ณ ตอนนี้)
-  const paidAmount = booking.paymentStatus === "PAID"
-    ? (booking.paymentAmount ?? booking.totalPrice)
-    : 0
+  // ຄຳນວນຍອດໂອນຄືນໂດຍປະມານ (ຖ້າຫາກວ່າຊຳລະແລ້ວ)
+  const paidCharge = booking.transactions.find((tx) => tx.type === "CHARGE" && tx.status === "PAID")
+  const paidAmount = paidCharge
+    ? paidCharge.amount
+    : booking.paymentStatus === "PAID"
+      ? (booking.paymentAmount ?? booking.totalPrice)
+      : 0
   const refund = computeRefund(paidAmount, new Date(booking.checkIn))
   const needBank = refund.amount > 0
+  const showRefundPayout = refund.percent > 0
+
+  // revoke ObjectURL ເພື່ອຫຼີກລ້ຽງ memory leak
+  useEffect(() => {
+    if (!qrPreview) return
+    return () => URL.revokeObjectURL(qrPreview)
+  }, [qrPreview])
+
+  function handleQrChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setQrFile(file)
+    setQrPreview(URL.createObjectURL(file))
+  }
 
   async function handleCancel() {
     if (!reason.trim()) { setError("ກະລຸນາລະບຸເຫດຜົນ"); return }
@@ -126,17 +147,21 @@ function CancelModal({ booking, onClose, onDone }: {
     }
     setLoading(true); setError("")
     try {
+      const fd = new FormData()
+      fd.append("bookingId", booking.id)
+      fd.append("reason", reason.trim())
+      if (showRefundPayout) {
+        if (bankName.trim()) fd.append("refundBankName", bankName.trim())
+        if (accName.trim()) fd.append("refundAccountName", accName.trim())
+        if (accNo.trim()) fd.append("refundAccountNumber", accNo.trim())
+        if (qrFile) {
+          fd.append("refundQrFile", qrFile)
+        }
+      }
+
       const res  = await fetch("/api/cancel-requests", {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          bookingId: booking.id, reason,
-          ...(needBank ? {
-            refundBankName:      bankName.trim(),
-            refundAccountName:   accName.trim(),
-            refundAccountNumber: accNo.trim(),
-          } : {}),
-        }),
+        body: fd,
       })
       const data = await res.json()
       if (!res.ok) { setError(data.message ?? "ບໍ່ສຳເລັດ"); return }
@@ -150,7 +175,7 @@ function CancelModal({ booking, onClose, onDone }: {
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 font-lao">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 sm:p-8 relative">
         <button onClick={onClose} className="absolute top-5 right-5 text-gray-500 hover:text-gray-700">
           <X size={18} />
         </button>
@@ -159,69 +184,97 @@ function CancelModal({ booking, onClose, onDone }: {
             <XCircle size={18} className="text-red-500" />
           </div>
           <div>
-            <h3 className="text-[15px] font-bold text-gray-900">ຂໍຍົກເລີກການຈອງ</h3>
-            <p className="text-[11px] text-gray-500">{booking.room.name} · {fmtDate(booking.checkIn)}</p>
+            <h3 className="text-[15px] font-bold text-gray-900 font-lao">ຂໍຍົກເລີກການຈອງ</h3>
+            <p className="text-[11px] text-gray-500 font-lao">{booking.room.name} · {fmtDate(booking.checkIn)}</p>
           </div>
         </div>
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
-          <p className="text-[12px] text-amber-700 flex items-start gap-2">
+          <p className="text-[12px] text-amber-700 flex items-start gap-2 font-lao">
             <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
             Admin ຈະກວດສອບຄຳຮ້ອງ — ການຍົກເລີກຈະມີຜົນຫຼັງໄດ້ຮັບການອະນຸມັດ
           </p>
         </div>
 
-        {/* นโยบายเงินคืน */}
+        {/* ນະໂຍບາຍເງິນຄືນ */}
         <div className="border border-gray-200 rounded-lg px-4 py-3 mb-4">
-          <p className="text-[11px] font-semibold text-gray-500 mb-1.5">ນະໂຍບາຍເງິນຄืນ (คิดตามเวลาก่อน Check-in)</p>
+          <p className="text-[11px] font-semibold text-gray-600 mb-1.5 font-lao">ນະໂຍບາຍເງິນຄືນ (ຕາມເວລາກ່ອນ Check-in)</p>
           <ul className="space-y-0.5">
             {REFUND_POLICY.map((p) => (
-              <li key={p.percent} className="flex justify-between text-[11px] text-gray-500">
+              <li key={p.percent} className="flex justify-between text-[11px] text-gray-700 font-lao">
                 <span>{p.label}</span>
-                <span className={`font-semibold ${p.percent > 0 ? "text-green-600" : "text-red-500"}`}>ຄืน {p.percent}%</span>
+                <span className={`font-semibold ${p.percent > 0 ? "text-green-600" : "text-red-500"}`}>ຄືນ {p.percent}%</span>
               </li>
             ))}
           </ul>
         </div>
 
-        {/* ยอดคืนโดยประมาณ + บัญชีรับเงินคืน (เฉพาะเมื่อจ่ายมาแล้ว) */}
-        {needBank ? (
+        {/* ຍອດຄືນໂດຍປະມານ + ບັນຊີຮັບເງິນຄືນ (ຖ້າຫາກວ່າຊຳລະແລ້ວ) */}
+        {showRefundPayout ? (
           <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-4">
             <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[12px] text-gray-600">ຍอดคืนโดยประมาณ ({refund.percent}%)</span>
-              <span className="text-[15px] font-bold text-green-700">{fmt(refund.amount)} ₭</span>
+              <span className="text-[12px] text-gray-700 font-lao">ຍອດຄືນໂດຍປະມານ ({refund.percent}%)</span>
+              <span className="text-[15px] font-bold text-green-700 font-lao">{fmt(refund.amount)} ₭</span>
             </div>
-            <p className="text-[11px] text-gray-500 mb-2">* ຍอดจริงยืนยันโดย Admin ตอนอนุมัติ · โอนคืนภายใน 3–7 ວັນທຳການ</p>
-            <div className="space-y-2">
-              <input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="ທະນາຄານ (เช่น BCEL)"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-green-300" />
+            <p className="text-[11px] text-gray-600 mb-3 font-lao">* ຍອດທີ່ແນ່ນອນຈະຖືກຢືນຢັນໂດຍ Admin ເມື່ອອະນຸມັດ</p>
+            <p className="text-[11px] font-semibold text-gray-700 mb-2 font-lao">ໃສ່ຂໍ້ມູນບັນຊີຮັບເງິນຄືນ:</p>
+            <div className="space-y-2 mb-3">
+              <input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="ທະນາຄານ (ຕົວຢ່າງ BCEL)"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[12px] text-gray-900 bg-white placeholder:text-gray-500 outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 font-lao" />
               <input value={accName} onChange={(e) => setAccName(e.target.value)} placeholder="ຊື່ບັນຊີ"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-green-300" />
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[12px] text-gray-900 bg-white placeholder:text-gray-500 outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 font-lao" />
               <input value={accNo} onChange={(e) => setAccNo(e.target.value)} placeholder="ເລກບັນຊີ"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-green-300" />
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-[12px] text-gray-900 bg-white placeholder:text-gray-500 outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 font-lao" />
+            </div>
+            
+            <div className="border-t border-green-200 pt-3">
+              <p className="text-[11px] font-semibold text-gray-700 mb-2 font-lao">ອັບໂຫຼດ QR Code ແບບບັນຊີ (ທາງເລືອກ):</p>
+              <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleQrChange} />
+              {qrPreview ? (
+                <div className="relative">
+                  <Image
+                    src={qrPreview}
+                    alt="QR preview"
+                    width={384}
+                    height={128}
+                    unoptimized
+                    className="w-full h-32 object-cover rounded-lg border border-green-300"
+                  />
+                  <button type="button" onClick={() => { setQrFile(null); setQrPreview("") }}
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => fileRef.current?.click()}
+                  className="w-full border-2 border-dashed border-green-300 rounded-lg py-3 text-center text-[12px] text-gray-600 hover:bg-green-50 transition-all font-lao">
+                  <Upload size={16} className="mx-auto mb-1 text-green-600" />
+                  ຄລິກເພື່ອອັບໂຫຼດ QR Code
+                </button>
+              )}
             </div>
           </div>
         ) : (
           <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 mb-4">
-            <p className="text-[11px] text-gray-500">ການຈອງนี้ยังไม่มีการชำระเงิน — ไม่มียอดต้องคืน</p>
+            <p className="text-[11px] text-gray-700 font-lao">ການຈອງນີ້ຍັງບໍ່ມີການຊຳລະເງິນ — ບໍ່ມີຍອດຕ້ອງຄືນ</p>
           </div>
         )}
 
-        <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1 block">
+        <label className="text-[11px] font-semibold text-gray-700 uppercase tracking-wide mb-1.5 block font-lao">
           ເຫດຜົນການຍົກເລີກ
         </label>
         <textarea
           value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
           placeholder="ລະບຸເຫດຜົນ..."
-          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-[13px] outline-none focus:border-red-300 resize-none mb-4"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-[13px] text-gray-900 bg-white placeholder:text-gray-500 outline-none focus:border-red-400 focus:ring-1 focus:ring-red-200 resize-none mb-4 font-lao"
         />
-        {error && <p className="text-red-500 text-[12px] mb-3">{error}</p>}
+        {error && <p className="text-red-500 text-[12px] mb-3 font-lao">{error}</p>}
         <div className="flex gap-3">
           <button onClick={onClose}
-            className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-600 hover:bg-gray-50 transition-all">
+            className="flex-1 py-2.5 border border-gray-300 rounded-xl text-[13px] text-gray-700 hover:bg-gray-50 transition-all font-lao font-semibold">
             ຍ້ອນກັບ
           </button>
           <button onClick={handleCancel} disabled={loading}
-            className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-[13px] font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+            className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-[13px] font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2 font-lao">
             {loading ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
             ສົ່ງຄຳຮ້ອງ
           </button>
@@ -237,6 +290,7 @@ function ReviewModal({ booking, onClose, onDone }: {
   onClose: () => void
   onDone:  () => void
 }) {
+  const { t } = useLanguage()
   const [rating,  setRating]  = useState(booking.review?.rating ?? 5)
   const [comment, setComment] = useState(booking.review?.comment ?? "")
   const [loading, setLoading] = useState(false)
@@ -244,7 +298,7 @@ function ReviewModal({ booking, onClose, onDone }: {
 
   async function handleSubmit() {
     if (rating < 1 || rating > 5) {
-      setError("Rating must be between 1 and 5")
+      setError(t("ratingError"))
       return
     }
 
@@ -262,12 +316,12 @@ function ReviewModal({ booking, onClose, onDone }: {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error ?? "Failed to submit review")
+        setError(data.error ?? t("reviewSubmitError"))
         return
       }
       onDone()
     } catch {
-      setError("Failed to submit review")
+      setError(t("reviewSubmitError"))
     } finally {
       setLoading(false)
     }
@@ -285,7 +339,7 @@ function ReviewModal({ booking, onClose, onDone }: {
             <Star size={18} className="text-amber-500 fill-amber-400" />
           </div>
           <div>
-            <h3 className="text-[15px] font-bold text-gray-900">Review your stay</h3>
+            <h3 className="text-[15px] font-bold text-gray-900">{t("reviewStay")}</h3>
             <p className="text-[11px] text-gray-500">{booking.room.name} - {fmtDate(booking.checkIn)}</p>
           </div>
         </div>
@@ -311,7 +365,7 @@ function ReviewModal({ booking, onClose, onDone }: {
           value={comment}
           onChange={(event) => setComment(event.target.value)}
           rows={4}
-          placeholder="Tell us about your stay..."
+          placeholder={t("tellUsAboutStay")}
           className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-[13px] outline-none focus:border-amber-300 resize-none mb-4"
         />
 
@@ -322,7 +376,7 @@ function ReviewModal({ booking, onClose, onDone }: {
             onClick={onClose}
             className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-600 hover:bg-gray-50 transition-all"
           >
-            Cancel
+            {t("cancel")}
           </button>
           <button
             onClick={handleSubmit}
@@ -330,7 +384,7 @@ function ReviewModal({ booking, onClose, onDone }: {
             className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[13px] font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Star size={14} />}
-            Submit
+            {t("submit")}
           </button>
         </div>
       </div>
@@ -343,6 +397,7 @@ function BookingCard({ booking, onCancel, onReview }: {
   onCancel: () => void
   onReview: () => void
 }) {
+  const { t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
   const bCfg  = bookingStatusCfg[booking.status]  ?? bookingStatusCfg.PENDING
   const pCfg  = paymentStatusCfg[booking.paymentStatus] ?? paymentStatusCfg.PENDING
@@ -366,7 +421,7 @@ function BookingCard({ booking, onCancel, onReview }: {
 
         {/* Room image */}
         <div className="relative w-28 h-28 flex-shrink-0 sm:w-36 sm:h-36">
-          <Image src={cover} alt={booking.room.name} fill className="object-cover"
+          <Image src={cover} alt={booking.room.name} fill sizes="(max-width: 640px) 7rem, 9rem" className="object-cover"
             onError={(e) => { (e.target as HTMLImageElement).src = "/room.png" }} />
         </div>
 
@@ -432,7 +487,7 @@ function BookingCard({ booking, onCancel, onReview }: {
                 <button onClick={onReview}
                   className="inline-flex items-center gap-1 text-[11px] border border-amber-200 text-amber-600 hover:bg-amber-50 px-3 py-1.5 rounded-lg font-medium transition-all">
                   <Star size={11} className={booking.review ? "fill-amber-400" : ""} />
-                  {booking.review ? "Edit review" : "Review"}
+                  {booking.review ? t("editReview") : t("review")}
                 </button>
               )}
               {/* Expand details */}
@@ -484,6 +539,17 @@ function BookingCard({ booking, onCancel, onReview }: {
                         <p className="text-[11px] text-gray-500">
                           {tx.paymentDate ? fmtDate(tx.paymentDate) : "ຍັງບໍ່ຊຳລະ"}
                         </p>
+                        {tx.slipImage && (
+                          <a
+                            href={`/api/slips/${encodeURIComponent(tx.slipImage)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700"
+                          >
+                            <FileText size={11} />
+                            {tx.type === "REFUND" ? "View refund slip" : "View slip"}
+                          </a>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">
@@ -576,7 +642,7 @@ export default function HistoryPage() {
               else router.push("/profile")
             }}
             className="flex items-center gap-1.5 px-2.5 py-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 text-[12px]">
-            <ArrowLeft size={16} /> ກັບຄืน
+            <ArrowLeft size={16} /> ກັບຄືນ
           </button>
           <div className="flex-1">
             <h1 className="text-[16px] font-bold text-gray-900">ປະຫວັດການຈອງ</h1>

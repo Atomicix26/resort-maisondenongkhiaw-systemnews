@@ -10,6 +10,7 @@ import { getRedirectByRole } from "@/lib/routes"
 import { AdminSidebar } from "@/components/admin-sidebar"
 import { SuperAdminSidebar } from "@/components/superadmin-sidebar"
 import { ProfileMenu } from "@/components/profile-menu"
+import { useLanguage } from "@/components/language-provider"
 import {
   User, LogOut, Bed, Search, Wifi, Wind,
   Users, Eye, Pencil, X, CheckCircle2, Star,
@@ -38,11 +39,19 @@ interface Room {
   images:    string[]
   amenities: string[]
   featured:  boolean
+  status:    "AVAILABLE" | "OCCUPIED" | "MAINTENANCE" | "RESERVED"
+  available: boolean
+  unavailableReason: string | null
 }
 
 function getRoomCover(room: Room): string {
   if (room.images?.[0] && !room.images[0].includes("placeholder")) return room.images[0]
   return "/room.png"
+}
+
+function roomUnavailableText(room: Room) {
+  if (room.available) return ""
+  return room.unavailableReason ?? "ບໍ່ພ້ອມໃຊ້ງານ"
 }
 
 // Read-only field row for the staff account-settings view.
@@ -151,6 +160,7 @@ function EditProfileModal({
 export default function ProfilePage() {
   const router                    = useRouter()
   const { data: session, status } = useSession()
+  const { t } = useLanguage()
 
   const [profile,      setProfile]      = useState<UserProfile | null>(null)
   const [rooms,        setRooms]        = useState<Room[]>([])
@@ -177,8 +187,13 @@ export default function ProfilePage() {
   const fetchRooms = useCallback(async (q = "") => {
     setLoadRooms(true)
     try {
-      const url = q ? `/api/rooms?search=${encodeURIComponent(q)}` : "/api/rooms"
-      const res = await fetch(url)
+      const params = new URLSearchParams()
+      if (q) params.set("search", q)
+      if (checkIn && checkOut) {
+        params.set("checkIn", checkIn)
+        params.set("checkOut", checkOut)
+      }
+      const res = await fetch(`/api/rooms${params.size ? `?${params}` : ""}`)
       const data = await res.json()
       if (!res.ok || !Array.isArray(data)) { setRooms([]); return }
       setRooms(data)
@@ -187,7 +202,7 @@ export default function ProfilePage() {
     } finally {
       setLoadRooms(false)
     }
-  }, [])
+  }, [checkIn, checkOut])
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void fetchRooms() }, 0)
@@ -201,6 +216,11 @@ export default function ProfilePage() {
   function handleBook() {
     if (!selectedRoom || !checkIn || !checkOut) {
       alert("ກະລຸນາເລືອກຫ້ອງ ແລະ ວັນທີໃຫ້ຄົບ"); return
+    }
+    const room = rooms.find((r) => r.id === selectedRoom)
+    if (!room) return
+    if (!room.available) {
+      alert(roomUnavailableText(room)); return
     }
     router.push(`/payment?roomId=${selectedRoom}&checkIn=${checkIn}&checkOut=${checkOut}`)
   }
@@ -231,9 +251,9 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-[20px] font-bold text-gray-900 flex items-center gap-2">
-                <Settings size={20} className="text-blue-600" /> Account Settings
+                <Settings size={20} className="text-blue-600" /> {t("accountSettings")}
               </h1>
-              <p className="text-[12px] text-gray-500 mt-1">Your account details and preferences.</p>
+              <p className="text-[12px] text-gray-500 mt-1">{t("accountDetails")}</p>
             </div>
             <ProfileMenu />
           </div>
@@ -256,27 +276,27 @@ export default function ProfilePage() {
 
               {/* details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-                <InfoRow label="Full name" value={displayName} />
-                <InfoRow label="Email" value={profile.email} />
-                <InfoRow label="Phone" value={profile.phone} />
-                <InfoRow label="Role" value={profile.role} />
-                <InfoRow label="Account ID" value={profile.id} mono />
-                <InfoRow label="Member since" value={joined} />
+                <InfoRow label={t("fullName")} value={displayName} />
+                <InfoRow label={t("email")} value={profile.email} />
+                <InfoRow label={t("phone")} value={profile.phone} />
+                <InfoRow label={t("role")} value={profile.role} />
+                <InfoRow label={t("accountId")} value={profile.id} mono />
+                <InfoRow label={t("memberSince")} value={joined} />
               </div>
 
               {/* actions */}
               <div className="flex flex-wrap items-center gap-3 mt-6 pt-5 border-t border-gray-100">
                 <button onClick={() => setEditOpen(true)}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-[12px] font-semibold">
-                  <Pencil size={13} /> Edit profile
+                  <Pencil size={13} /> {t("editProfile")}
                 </button>
                 <Link href={getRedirectByRole(profile.role)}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 px-4 py-2 text-[12px] font-semibold">
-                  <LayoutDashboard size={13} /> Dashboard
+                  <LayoutDashboard size={13} /> {t("dashboard")}
                 </Link>
                 <button onClick={() => signOut({ callbackUrl: "/login" })}
                   className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 text-[12px] font-semibold">
-                  <LogOut size={13} /> Logout
+                  <LogOut size={13} /> {t("navLogout")}
                 </button>
               </div>
             </div>
@@ -317,8 +337,17 @@ export default function ProfilePage() {
             <span className="text-[11px] font-semibold text-white/80 uppercase tracking-[0.2em] mb-0.5 drop-shadow">
               ຍິນດີຕ້ອນຮັບສູ່
             </span>
-            <span className="text-[24px] font-extrabold tracking-wide drop-shadow-lg group-hover:text-white/90 transition-colors">
-              Resort MDNK1
+            <span className="text-[24px] font-extrabold tracking-wide drop-shadow-lg group-hover:text-white/90 transition-colors"
+            style={{ 
+                backgroundImage: 'linear-gradient(135deg, #fff 0%, #f0e5d8 50%, #e8d4b8 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                textShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.2))'
+              }}
+              >
+              Resort Maison De Nongkhiaw
             </span>
           </Link>
 
@@ -401,7 +430,10 @@ export default function ProfilePage() {
 
             <div className="flex-1 min-w-[120px]">
               <p className="text-[11px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">ວັນທີເຂົ້າພັກ</p>
-              <input type="date" min={today} value={checkIn} onChange={(e) => setCheckIn(e.target.value)}
+              <input type="date" min={today} value={checkIn} onChange={(e) => {
+                setCheckIn(e.target.value)
+                if (checkOut && e.target.value >= checkOut) setCheckOut("")
+              }}
                 className="w-full border-b border-gray-300 pb-1.5 text-[13px] text-gray-900 outline-none focus:border-blue-500" />
             </div>
 
@@ -425,7 +457,7 @@ export default function ProfilePage() {
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" size={13} />
               <input type="text" placeholder="ຄົ້ນຫາ..." value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full py-2.5 pl-8 pr-3 border border-gray-200 rounded-lg bg-gray-50 text-[13px] text-gray-900 placeholder:text-gray-500 outline-none focus:border-blue-400 focus:bg-white" />
+                className="w-full py-2.5 pl-8 pr-3 border border-gray-300 rounded-lg bg-white text-[13px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
             </div>
           </div>
         </div>
@@ -467,12 +499,14 @@ export default function ProfilePage() {
         {/* Cards */}
         {!loadRooms && rooms.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {rooms.map((room) => (
+            {rooms.map((room) => {
+              const blocked = !room.available
+              return (
               <div key={room.id}
-                className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-200 group">
+                className={`bg-white rounded-2xl border overflow-hidden transition-all duration-200 group ${blocked ? "border-gray-200 opacity-70" : "border-gray-100 hover:shadow-xl hover:-translate-y-1"}`}>
                 <div className="relative h-48 w-full overflow-hidden">
-                  <Image src={getRoomCover(room)} alt={room.name} fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                  <Image src={getRoomCover(room)} alt={room.name} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    className={`object-cover transition-transform duration-300 ${blocked ? "grayscale" : "group-hover:scale-105"}`}
                     onError={(e) => { (e.target as HTMLImageElement).src = "/room.png" }} />
                   {room.featured && (
                     <span className="absolute top-2 left-2 bg-amber-400 text-amber-900 text-[9px] font-bold px-2 py-0.5 rounded-full">
@@ -482,6 +516,11 @@ export default function ProfilePage() {
                   <div className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-0.5 rounded-full text-[11px] font-bold text-blue-700">
                     {room.price.toLocaleString()} ₭
                   </div>
+                  {blocked && (
+                    <div className="absolute inset-x-0 bottom-0 bg-gray-950/75 px-3 py-2 text-[12px] font-bold text-white">
+                      {roomUnavailableText(room)}
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-5">
@@ -511,16 +550,18 @@ export default function ProfilePage() {
                   )}
 
                   <button
+                    disabled={blocked}
                     onClick={() => {
+                      if (blocked) return
                       setSelectedRoom(room.id)
                       window.scrollTo({ top: 0, behavior: "smooth" })
                     }}
-                    className="w-full mt-4 py-2.5 border-2 border-gray-800 rounded-xl text-[12px] font-bold text-gray-800 tracking-wide hover:bg-gray-800 hover:text-white transition-all active:scale-95">
+                    className={`w-full mt-4 py-2.5 border-2 rounded-xl text-[12px] font-bold tracking-wide transition-all active:scale-95 ${blocked ? "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-400" : "border-gray-800 text-gray-800 hover:bg-gray-800 hover:text-white"}`}>
                     ເລືອກຫ້ອງນີ້
                   </button>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </section>

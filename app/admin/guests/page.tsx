@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Loader2, RefreshCw, Search, Users, AlertTriangle } from "lucide-react"
 import { AdminSidebar } from "@/components/admin-sidebar"
 import { ProfileMenu } from "@/components/profile-menu"
+import { TranslationKey, useLanguage } from "@/components/language-provider"
 
 interface Guest {
   id: string
@@ -26,6 +27,7 @@ const d = (s: string | null) => (s ? new Date(s).toLocaleDateString("en-GB", { d
 export default function AdminGuestsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useLanguage()
 
   const [guests, setGuests] = useState<Guest[]>([])
   const [loading, setLoading] = useState(true)
@@ -79,16 +81,16 @@ export default function AdminGuestsPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-[20px] font-bold text-gray-900 flex items-center gap-2">
-              <Users size={20} className="text-blue-600" /> Guests
+              <Users size={20} className="text-blue-600" /> {t("guests")}
             </h1>
             <p className="text-[12px] text-gray-500 mt-1">
-              Guest history, spending and no-show record — for the front desk.
+              {t("guestsSubtitle")}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={fetchGuests}
               className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] text-gray-600 hover:bg-gray-50">
-              <RefreshCw size={13} /> Refresh
+              <RefreshCw size={13} /> {t("refresh")}
             </button>
             <ProfileMenu />
           </div>
@@ -99,17 +101,17 @@ export default function AdminGuestsPage() {
           <button onClick={() => setOnlyRisk(false)}
             className={`px-3 py-1.5 rounded-lg text-[11px] font-medium
               ${!onlyRisk ? "bg-[#0B2447] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-            All <span className="ml-1.5 opacity-60">({totalGuests})</span>
+            {t("all")} <span className="ml-1.5 opacity-60">({totalGuests})</span>
           </button>
           <button onClick={() => setOnlyRisk(true)}
             className={`px-3 py-1.5 rounded-lg text-[11px] font-medium inline-flex items-center gap-1.5
               ${onlyRisk ? "bg-[#0B2447] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-            <AlertTriangle size={12} /> Has no-show <span className="opacity-60">({riskGuests})</span>
+            <AlertTriangle size={12} /> {t("hasNoShow")} <span className="opacity-60">({riskGuests})</span>
           </button>
           <div className="relative ml-auto">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search guest..."
+              placeholder={t("searchGuest")}
               className="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-[12px] text-gray-700 bg-white outline-none focus:border-blue-300 w-56" />
           </div>
         </div>
@@ -121,8 +123,8 @@ export default function AdminGuestsPage() {
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="bg-gray-50/60 text-left">
-                  {["Guest", "Contact", "Joined", "Bookings", "Stays", "No-show", "Cancelled", "Total Spent", "Last Stay"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  {(["guests", "contact", "joined", "bookings", "stays", "noShow", "cancelled", "totalSpent", "lastStay"] as TranslationKey[]).map((h) => (
+                    <th key={h} className="px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{t(h)}</th>
                   ))}
                 </tr>
               </thead>
@@ -130,7 +132,7 @@ export default function AdminGuestsPage() {
                 {loading ? (
                   <tr><td colSpan={9} className="py-16 text-center"><Loader2 size={24} className="text-blue-400 animate-spin inline" /></td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={9} className="py-16 text-center text-gray-400 text-[13px]">No guests found</td></tr>
+                  <tr><td colSpan={9} className="py-16 text-center text-gray-400 text-[13px]">{t("noGuestsFound")}</td></tr>
                 ) : filtered.map((g) => (
                   <tr key={g.id} className="hover:bg-gray-50/50">
                     <td className="px-4 py-3">

@@ -21,3 +21,63 @@ export async function sendOtpEmail(to: string, otp: string) {
     `,
   })
 }
+
+export async function sendBookingConfirmation({
+  to,
+  customerName,
+  bookingId,
+  roomName,
+  checkIn,
+  checkOut,
+  guests,
+  totalPrice,
+}: {
+  to: string
+  customerName: string
+  bookingId: string
+  roomName: string
+  checkIn: string
+  checkOut: string
+  guests: number
+  totalPrice: number
+}) {
+  await resend.emails.send({
+    from: "Resort Maison De Nongkhiaw <noreply@yourdomain.com>",
+    to,
+    subject: "🎉 Booking Confirmation",
+
+    html: `
+      <div style="font-family:Arial,sans-serif">
+
+      <h2>🏨 Resort Maison De Nongkhiaw</h2>
+
+      <h3>Booking Confirmation</h3>
+
+      <p>Hello <b>${customerName}</b></p>
+
+      <p>Your booking has been received.</p>
+
+      <hr>
+
+      <p><b>Booking ID :</b> ${bookingId}</p>
+
+      <p><b>Room :</b> ${roomName}</p>
+
+      <p><b>Check In :</b> ${checkIn}</p>
+
+      <p><b>Check Out :</b> ${checkOut}</p>
+
+      <p><b>Guests :</b> ${guests}</p>
+
+      <p><b>Total :</b> ${totalPrice.toLocaleString()} Kip</p>
+
+      <hr>
+
+      <p style="color:orange;font-weight:bold">
+      Status : Waiting for Confirmation
+      </p>
+
+      </div>
+    `,
+  })
+}

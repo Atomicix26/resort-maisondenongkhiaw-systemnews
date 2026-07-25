@@ -21,7 +21,7 @@ export default function BookingListReportPage() {
   const [filter, setFilter] = useState<string>("ALL")
 
   return (
-    <ReportShell slug="booking-list" title="ລາຍການຈອງ" subtitle="Booking List — individual bookings in range, filter &amp; export">
+    <ReportShell slug="booking-list" title="ລາຍງານການຈອງ" subtitle="Booking List — individual bookings in range, filter &amp; export">
       {(data) => {
         const rows = data.bookingList.filter((b) => filter === "ALL" || b.status === filter)
         return (

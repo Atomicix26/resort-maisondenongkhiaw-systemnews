@@ -34,3 +34,12 @@ body {
   font-family: var(--font-ui);
   line-height: 1.65;
 }
+
+/* Sonner Toast Styling */
+[data-sonner-toaster] {
+  font-family: var(--font-ui);
+}
+
+[data-sonner-toast] {
+  font-family: var(--font-ui);
+}

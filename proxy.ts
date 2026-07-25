@@ -35,7 +35,6 @@ export default withAuth(
       "/schedule",
       "/review",
       "/api/admin",
-      "/api/slips",      // serve payment slips
     ]
     if (adminPrefixes.some((r) => pathname.startsWith(r))) {
       if (!role) return deny(401, "/login")
@@ -73,7 +72,6 @@ export const config = {
     "/superadmin/:path*",
     // ── Privileged API (defense-in-depth — เสริม self-guard ในแต่ละ route) ──
     "/api/admin/:path*",        // ADMIN / SUPERADMIN
-    "/api/slips/:path*",        // ADMIN / SUPERADMIN
     "/api/superadmin/:path*",   // SUPERADMIN
     "/api/staff/:path*",        // SUPERADMIN
   ],

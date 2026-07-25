@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { hasRole, ADMIN_ROLES } from "@/lib/rbac"
-import { CancelStatus } from "@prisma/client"
+import { CancelStatus, Prisma } from "@prisma/client"
 
 // GET /api/admin/cancel-requests — รายการคำขอยกเลิก/คืนเงินทั้งหมด
 //  พร้อม booking/user/room + สถานะ REFUND transaction (รู้ว่าโอนคืนแล้วยัง)
@@ -38,6 +38,15 @@ export async function GET(request: NextRequest) {
       },
     })
 
+    const qrRows = rows.length
+      ? await prisma.$queryRaw<Array<{ id: string; refundQrImage: string | null }>>`
+          SELECT id, refundQrImage
+          FROM cancel_requests
+          WHERE id IN (${Prisma.join(rows.map((r) => r.id))})
+        `
+      : []
+    const qrById = new Map(qrRows.map((row) => [row.id, row.refundQrImage ?? ""]))
+
     const data = rows.map((r) => {
       const refundTx = r.booking.transactions[0] ?? null
       return {
@@ -52,6 +61,7 @@ export async function GET(request: NextRequest) {
           holder: r.refundAccountName ?? "",
           number: r.refundAccountNumber ?? "",
         },
+        refundQrImage: qrById.get(r.id) ?? "",
         requestDate: r.requestDate.toISOString(),
         actionDate:  r.actionDate ? r.actionDate.toISOString() : null,
         guest:  [r.user.name, r.user.lastName].filter(Boolean).join(" ") || r.user.email,
@@ -67,7 +77,7 @@ export async function GET(request: NextRequest) {
           status:     r.booking.status,
         },
         refund: refundTx
-          ? { id: refundTx.id, status: refundTx.status, amount: Number(refundTx.amount), hasSlip: !!refundTx.slipImage }
+          ? { id: refundTx.id, status: refundTx.status, amount: Number(refundTx.amount), hasSlip: !!refundTx.slipImage, slipImage: refundTx.slipImage ?? "" }
           : null,
       }
     })

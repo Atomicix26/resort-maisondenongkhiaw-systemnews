@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Loader2, RefreshCw, Search } from "lucide-react"
 import { AdminSidebar } from "@/components/admin-sidebar"
 import { ProfileMenu } from "@/components/profile-menu"
+import { TranslationKey, useLanguage } from "@/components/language-provider"
 
 type RoomStatus = "AVAILABLE" | "OCCUPIED" | "MAINTENANCE" | "RESERVED"
 
@@ -19,16 +20,17 @@ interface RoomStatusItem {
   statusLogs: { changedAt: string; oldStatus: RoomStatus; newStatus: RoomStatus }[]
 }
 
-const STATUS_CFG: Record<RoomStatus, { label: string; color: string; dot: string }> = {
-  AVAILABLE: { label: "Available", color: "bg-green-100 text-green-700", dot: "bg-green-500" },
-  OCCUPIED: { label: "Occupied", color: "bg-blue-100 text-blue-700", dot: "bg-blue-500" },
-  MAINTENANCE: { label: "Maintenance", color: "bg-orange-100 text-orange-700", dot: "bg-orange-500" },
-  RESERVED: { label: "Reserved", color: "bg-purple-100 text-purple-700", dot: "bg-purple-500" },
+const STATUS_CFG: Record<RoomStatus, { labelKey: TranslationKey; color: string; dot: string }> = {
+  AVAILABLE: { labelKey: "statusAvailable", color: "bg-green-100 text-green-700", dot: "bg-green-500" },
+  OCCUPIED: { labelKey: "statusOccupied", color: "bg-blue-100 text-blue-700", dot: "bg-blue-500" },
+  MAINTENANCE: { labelKey: "statusMaintenance", color: "bg-orange-100 text-orange-700", dot: "bg-orange-500" },
+  RESERVED: { labelKey: "statusReserved", color: "bg-purple-100 text-purple-700", dot: "bg-purple-500" },
 }
 
 export default function AdminRoomStatusPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useLanguage()
 
   const [rooms, setRooms] = useState<RoomStatusItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -110,13 +112,13 @@ export default function AdminRoomStatusPage() {
       <main className="flex-1 ml-[210px] p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-[20px] font-bold text-gray-900">Room Status</h1>
-            <p className="text-[12px] text-gray-500 mt-1">Update housekeeping and availability status.</p>
+            <h1 className="text-[20px] font-bold text-gray-900">{t("roomStatus")}</h1>
+            <p className="text-[12px] text-gray-500 mt-1">{t("roomStatusSubtitle")}</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={fetchRooms}
               className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] text-gray-600 hover:bg-gray-50">
-              <RefreshCw size={13} /> Refresh
+              <RefreshCw size={13} /> {t("refresh")}
             </button>
             <ProfileMenu />
           </div>
@@ -127,14 +129,14 @@ export default function AdminRoomStatusPage() {
             <button key={item} onClick={() => setFilter(item)}
               className={`px-3 py-1.5 rounded-lg text-[11px] font-medium
                 ${filter === item ? "bg-[#0B2447] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-              {item === "ALL" ? "All" : STATUS_CFG[item].label}
+              {item === "ALL" ? t("all") : t(STATUS_CFG[item].labelKey)}
               <span className="ml-1.5 opacity-60">({counts[item]})</span>
             </button>
           ))}
           <div className="relative ml-auto">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input value={search} onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search room..."
+              placeholder={t("searchRoom")}
               className="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-[12px] text-gray-700 bg-white outline-none focus:border-blue-300 w-52" />
           </div>
         </div>
@@ -143,15 +145,15 @@ export default function AdminRoomStatusPage() {
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="grid grid-cols-[90px_1fr_150px_130px_180px] gap-3 px-5 py-3 border-b border-gray-100 bg-gray-50/60">
-            {["Room", "Name", "Type", "Current", "Change Status"].map((head) => (
-              <p key={head} className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{head}</p>
+            {(["room", "name", "type", "current", "changeStatus"] as TranslationKey[]).map((head) => (
+              <p key={head} className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{t(head)}</p>
             ))}
           </div>
 
           {loading ? (
             <div className="py-16 flex justify-center"><Loader2 size={24} className="text-blue-400 animate-spin" /></div>
           ) : filtered.length === 0 ? (
-            <div className="py-16 text-center text-gray-400 text-[13px]">No rooms found</div>
+            <div className="py-16 text-center text-gray-400 text-[13px]">{t("noRoomsFound")}</div>
           ) : (
             <div className="divide-y divide-gray-100">
               {filtered.map((room) => {
@@ -161,18 +163,18 @@ export default function AdminRoomStatusPage() {
                     <p className="text-[12px] font-mono text-gray-500">{room.roomNumber ?? "-"}</p>
                     <div>
                       <p className="text-[13px] font-medium text-gray-800">{room.name}</p>
-                      <p className="text-[11px] text-gray-500">Capacity {room.capacity}</p>
+                      <p className="text-[11px] text-gray-500">{t("capacity")} {room.capacity}</p>
                     </div>
                     <p className="text-[12px] text-gray-500">{room.roomType?.typeName ?? "-"}</p>
                     <div className="flex items-center gap-1.5">
                       <span className={`h-1.5 w-1.5 rounded-full ${statusCfg.dot}`} />
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusCfg.color}`}>{statusCfg.label}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusCfg.color}`}>{t(statusCfg.labelKey)}</span>
                     </div>
                     <select value={room.status} disabled={saving === room.id}
                       onChange={(event) => updateStatus(room.id, event.target.value as RoomStatus)}
                       className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] text-gray-700 outline-none focus:border-blue-300 disabled:opacity-50">
                       {(Object.keys(STATUS_CFG) as RoomStatus[]).map((item) => (
-                        <option key={item} value={item}>{STATUS_CFG[item].label}</option>
+                        <option key={item} value={item}>{t(STATUS_CFG[item].labelKey)}</option>
                       ))}
                     </select>
                   </div>

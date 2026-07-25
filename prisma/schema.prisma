@@ -12,24 +12,27 @@ datasource db {
 //  แก้: ไม่แยก Employee ออกมา ใช้ role แทน
 // ════════════════════════════════════════════════════════════════
 model User {
-  id        String    @id @db.VarChar(30)
-  email     String    @unique
-  password  String
-  name      String?
-  lastName  String?
-  phone     String?
-  role      Role      @default(USER)
-  createdAt DateTime  @default(now())
-  deletedAt DateTime? // soft delete
-  otpCode      String?   @db.VarChar(64)
-  otpExpiresAt DateTime?
-  otpAttempts  Int       @default(0)
+  id               String               @id @db.VarChar(30)
+  email            String               @unique
+  password         String
+  name             String?
+  lastName         String?
+  phone            String?
+  role             Role                 @default(USER)
+  createdAt        DateTime             @default(now())
+  deletedAt        DateTime? // soft delete
+  otpCode          String?              @db.VarChar(64)
+  otpExpiresAt     DateTime?
+  otpAttempts      Int                  @default(0)
   // relations
   staff            Staff? // ถ้า role=ADMIN → มี Staff profile
   bookings         Booking[]
   cancelRequests   CancelRequest[]
   accessLogs       AccessLog[]
   verifiedPayments PaymentTransaction[] @relation("PaymentVerifier") // payment ที่ user นี้ verify (BUG-002)
+
+  checkInActions  CheckInLog[]  @relation("CheckInPerformedBy")
+  checkOutActions CheckOutLog[] @relation("CheckOutPerformedBy")
 
   @@index([email])
   @@index([role])
@@ -233,23 +236,26 @@ model BookApproval {
 //  CHECK-IN LOG  (Audit trail เมื่อ Staff ทำ check-in)
 // ════════════════════════════════════════════════════════════════
 model CheckInLog {
-  id          String    @id @db.VarChar(30)
-  bookingId   String    @db.VarChar(30)
-  staffId     String?   @db.VarChar(30)
-  actualTime  DateTime
+  id                String    @id @db.VarChar(30)
+  bookingId         String    @db.VarChar(30)
+  staffId           String?   @db.VarChar(30)
+  performedByUserId String?   @db.VarChar(30)
+  actualTime        DateTime
   // ── ເອกະສານຢືนยันตัวตน ที่พนักงานตรวจ/ถ่ายรูปจริงตอน check-in ──
-  docType     String? // ประเภทเอกสาร: ID_CARD | PASSPORT | OTHER
-  docNumber   String? // เลขที่เอกสาร
-  nationality String? // สัญชาติ
-  docExpiry   DateTime? // วันหมดอายุเอกสาร
-  docImage    String? // ชื่อไฟล์รูปเอกสาร (private/uploads/checkin-docs)
-  remarks     String?   @db.Text
-  createdAt   DateTime  @default(now())
+  docType           String? // ประเภทเอกสาร: ID_CARD | PASSPORT | OTHER
+  docNumber         String? // เลขที่เอกสาร
+  nationality       String? // สัญชาติ
+  docExpiry         DateTime? // วันหมดอายุเอกสาร
+  docImage          String? // ชื่อไฟล์รูปเอกสาร (private/uploads/checkin-docs)
+  remarks           String?   @db.Text
+  createdAt         DateTime  @default(now())
 
-  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  staff   Staff?  @relation(fields: [staffId], references: [id])
+  booking     Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  staff       Staff?  @relation(fields: [staffId], references: [id])
+  performedBy User?   @relation("CheckInPerformedBy", fields: [performedByUserId], references: [id])
 
   @@index([bookingId])
+  @@index([performedByUserId])
   @@map("check_in_logs")
 }
 
@@ -257,17 +263,20 @@ model CheckInLog {
 //  CHECK-OUT LOG
 // ════════════════════════════════════════════════════════════════
 model CheckOutLog {
-  id         String   @id @db.VarChar(30)
-  bookingId  String   @db.VarChar(30)
-  staffId    String?  @db.VarChar(30)
-  actualTime DateTime
-  remarks    String?  @db.Text
-  createdAt  DateTime @default(now())
+  id                String   @id @db.VarChar(30)
+  bookingId         String   @db.VarChar(30)
+  staffId           String?  @db.VarChar(30)
+  performedByUserId String?  @db.VarChar(30)
+  actualTime        DateTime
+  remarks           String?  @db.Text
+  createdAt         DateTime @default(now())
 
-  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  staff   Staff?  @relation(fields: [staffId], references: [id])
+  booking     Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  staff       Staff?  @relation(fields: [staffId], references: [id])
+  performedBy User?   @relation("CheckOutPerformedBy", fields: [performedByUserId], references: [id])
 
   @@index([bookingId])
+  @@index([performedByUserId])
   @@map("check_out_logs")
 }
 
@@ -275,22 +284,23 @@ model CheckOutLog {
 //  CANCEL REQUEST
 // ════════════════════════════════════════════════════════════════
 model CancelRequest {
-  id          String       @id @db.VarChar(30)
-  bookingId   String       @unique @db.VarChar(30)
-  userId      String       @db.VarChar(30)
-  reason      String       @db.Text
-  status      CancelStatus @default(PENDING)
-  refundable  Boolean      @default(false) // มีเงินให้คืนไหม (จ่ายมาแล้ว)
+  id                  String       @id @db.VarChar(30)
+  bookingId           String       @unique @db.VarChar(30)
+  userId              String       @db.VarChar(30)
+  reason              String       @db.Text
+  status              CancelStatus @default(PENDING)
+  refundable          Boolean      @default(false) // มีเงินให้คืนไหม (จ่ายมาแล้ว)
   // ── ยอดคืน คำนวณตามนโยบายเวลา (lib/refund.ts) ตอนลูกค้าขอยกเลิก ──
-  refundPercent Int? //  % ที่คืน (100 / 50 / 30 / 0)
-  refundAmount  Decimal? @db.Decimal(10, 2) // ยอดเงินคืนจริง
+  refundPercent       Int? //  % ที่คืน (100 / 50 / 30 / 0)
+  refundAmount        Decimal?     @db.Decimal(10, 2) // ยอดเงินคืนจริง
   // ── บัญชีรับเงินคืน (ไม่มี payment gateway → โอนคืนมือ) ──
   refundBankName      String?
   refundAccountName   String?
   refundAccountNumber String?
-  requestDate DateTime     @default(now())
-  actionDate  DateTime?
-  staffId     String?      @db.VarChar(30)
+  refundQrImage       String?
+  requestDate         DateTime     @default(now())
+  actionDate          DateTime?
+  staffId             String?      @db.VarChar(30)
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id])

@@ -50,13 +50,11 @@ export const authOptions: NextAuthOptions = {
 
           // ── บันทึก AccessLog ทุกครั้งที่ login สำเร็จ (audit trail) ──────────
           // best-effort: ถ้าเขียน log พลาดต้องไม่ทำให้ login ล้มเหลว
-          try {
-            await prisma.accessLog.create({
-              data: { id: nextId("accessLog"), userId: user.id, userType: user.role, ipAddress: ip },
-            })
-          } catch (logError) {
+          void prisma.accessLog.create({
+            data: { id: nextId("accessLog"), userId: user.id, userType: user.role, ipAddress: ip },
+          }).catch((logError) => {
             console.error("ACCESS_LOG_ERROR:", logError)
-          }
+          })
 
           return { id: user.id, email: user.email, name: user.name, role: user.role }
 

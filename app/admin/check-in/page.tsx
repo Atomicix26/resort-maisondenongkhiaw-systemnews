@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { AdminSidebar } from "@/components/admin-sidebar"
 import { ProfileMenu } from "@/components/profile-menu"
+import { TranslationKey, useLanguage } from "@/components/language-provider"
 
 // ── Types ────────────────────────────────────────────────────────
 interface Row {
@@ -21,17 +22,33 @@ interface Row {
   dueOut?: boolean
 }
 interface Feed { date: string; arrivals: Row[]; inHouse: Row[] }
+interface HistoryRow {
+  id: string
+  bookingId: string
+  action: "CHECK_IN" | "CHECK_OUT"
+  timestamp: string
+  note: string | null
+  guest: string
+  email: string
+  room: string
+  roomNumber: string | null
+  adminId: string | null
+  adminName: string
+  adminEmail: string | null
+}
 
-const DOC_TYPES = [
-  { value: "ID_CARD", label: "ID Card" },
-  { value: "PASSPORT", label: "Passport" },
-  { value: "OTHER", label: "Other" },
-]
+const DOC_TYPES: { value: string; labelKey: TranslationKey }[] = [
+  { value: "ID_CARD", labelKey: "idCard" },
+  { value: "PASSPORT", labelKey: "passport" },
+  { value: "OTHER", labelKey: "other" },
+] 
 
 const time = (s: string) => new Date(s).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
+const dateTime = (s: string) => new Date(s).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
 
 // ── Check-in modal (document capture) ────────────────────────────
 function CheckInModal({ row, onClose, onDone }: { row: Row; onClose: () => void; onDone: () => void }) {
+  const { t } = useLanguage()
   const [docType, setDocType] = useState("ID_CARD")
   const [docNumber, setDocNumber] = useState("")
   const [nationality, setNationality] = useState("")
@@ -68,54 +85,54 @@ function CheckInModal({ row, onClose, onDone }: { row: Row; onClose: () => void;
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-7 relative max-h-[90vh] overflow-y-auto">
         <button onClick={onClose} className="absolute top-5 right-5 text-gray-400 hover:text-gray-600"><X size={18} /></button>
         <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
-          <LogIn size={17} className="text-blue-600" /> Check-in
+          <LogIn size={17} className="text-blue-600" /> {t("checkIn")}
         </h2>
         <p className="text-[12px] text-gray-500 mt-0.5">{row.guest} · {row.room}{row.roomNumber ? ` (${row.roomNumber})` : ""}</p>
 
         {row.payAtHotel && (
           <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 p-3 text-[12px] text-amber-800 flex items-start gap-2">
             <Banknote size={14} className="mt-0.5 shrink-0" />
-            Pay at hotel — collect <b>{row.totalPrice.toLocaleString()} ₭</b> in cash. Checking in marks it paid.
+            {t("payAtHotel")} — {t("collectCash")} <b>{row.totalPrice.toLocaleString()} ₭</b>. {t("checkingInMarksPaid")}
           </div>
         )}
 
         <form onSubmit={submit} className="mt-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[11px] text-gray-600 font-semibold">Document type</label>
+              <label className="text-[11px] text-gray-600 font-semibold">{t("documentType")}</label>
               <select value={docType} onChange={(e) => setDocType(e.target.value)}
                 className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 bg-white outline-none focus:border-blue-400">
-                {DOC_TYPES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                {DOC_TYPES.map((d) => <option key={d.value} value={d.value}>{t(d.labelKey)}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[11px] text-gray-600 font-semibold">Document no.</label>
+              <label className="text-[11px] text-gray-600 font-semibold">{t("documentNo")}</label>
               <input value={docNumber} onChange={(e) => setDocNumber(e.target.value)} placeholder="1-2345-…"
                 className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 bg-white outline-none focus:border-blue-400" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[11px] text-gray-600 font-semibold">Nationality</label>
-              <input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder="Lao"
+              <label className="text-[11px] text-gray-600 font-semibold">{t("nationality")}</label>
+              <input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder={t("languageLao")}
                 className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 bg-white outline-none focus:border-blue-400" />
             </div>
             <div>
-              <label className="text-[11px] text-gray-600 font-semibold">Doc expiry</label>
+              <label className="text-[11px] text-gray-600 font-semibold">{t("docExpiry")}</label>
               <input type="date" value={docExpiry} onChange={(e) => setDocExpiry(e.target.value)}
                 className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 bg-white outline-none focus:border-blue-400" />
             </div>
           </div>
           <div>
-            <label className="text-[11px] text-gray-600 font-semibold">Remarks</label>
-            <input value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="optional"
+            <label className="text-[11px] text-gray-600 font-semibold">{t("remarks")}</label>
+            <input value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder={t("optional")}
               className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 bg-white outline-none focus:border-blue-400" />
           </div>
           <div>
-            <label className="text-[11px] text-gray-600 font-semibold">Document photo</label>
+            <label className="text-[11px] text-gray-600 font-semibold">{t("documentPhoto")}</label>
             <label className="mt-1 flex items-center gap-2 border border-dashed border-gray-300 rounded-lg px-3 py-2.5 text-[12px] text-gray-500 cursor-pointer hover:bg-gray-50">
               <Camera size={15} className="text-gray-400" />
-              {file ? file.name : "Upload / take a photo"}
+              {file ? file.name : t("uploadTakePhoto")}
               <input type="file" accept="image/*" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </label>
           </div>
@@ -123,10 +140,10 @@ function CheckInModal({ row, onClose, onDone }: { row: Row; onClose: () => void;
           {error && <p className="text-red-500 text-[12px]">{error}</p>}
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-600 hover:bg-gray-50">Cancel</button>
+              className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-600 hover:bg-gray-50">{t("cancel")}</button>
             <button type="submit" disabled={saving}
               className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[13px] font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-1.5">
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <LogIn size={15} />} Confirm check-in
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <LogIn size={15} />} {t("confirmCheckIn")}
             </button>
           </div>
         </form>
@@ -139,11 +156,17 @@ function CheckInModal({ row, onClose, onDone }: { row: Row; onClose: () => void;
 export default function AdminCheckInPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useLanguage()
 
   const today = new Date().toISOString().slice(0, 10)
   const [date, setDate] = useState(today)
+  const [tab, setTab] = useState<"WORKLIST" | "HISTORY">("WORKLIST")
+  const [historyFrom, setHistoryFrom] = useState(today)
+  const [historyTo, setHistoryTo] = useState(today)
   const [feed, setFeed] = useState<Feed | null>(null)
+  const [history, setHistory] = useState<HistoryRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState("")
   const [checkInRow, setCheckInRow] = useState<Row | null>(null)
@@ -165,14 +188,34 @@ export default function AdminCheckInPage() {
     } finally { setLoading(false) }
   }, [])
 
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true); setError("")
+    try {
+      const q = new URLSearchParams()
+      if (historyFrom) q.set("from", historyFrom)
+      if (historyTo) q.set("to", historyTo)
+      const res = await fetch(`/api/admin/check-in-history?${q}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Failed")
+      setHistory(Array.isArray(data) ? data : [])
+    } catch (err) {
+      setHistory([]); setError(err instanceof Error ? err.message : "Failed to load history")
+    } finally { setHistoryLoading(false) }
+  }, [historyFrom, historyTo])
+
   useEffect(() => {
     if (status !== "authenticated") return
     const t = window.setTimeout(() => { void fetchFeed(date) }, 0)
     return () => window.clearTimeout(t)
   }, [status, date, fetchFeed])
+  useEffect(() => {
+    if (status !== "authenticated" || tab !== "HISTORY") return
+    const t = window.setTimeout(() => { void fetchHistory() }, 0)
+    return () => window.clearTimeout(t)
+  }, [status, tab, fetchHistory])
 
   async function checkOut(row: Row) {
-    if (!window.confirm(`Check out ${row.guest} from ${row.room}?`)) return
+    if (!window.confirm(`${t("confirmCheckOutQuestion")} ${row.guest} - ${row.room}`)) return
     setBusy(row.id); setError("")
     try {
       const res = await fetch(`/api/admin/bookings/${row.id}`, {
@@ -204,16 +247,25 @@ export default function AdminCheckInPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-[20px] font-bold text-gray-900 flex items-center gap-2">
-              <DoorOpen size={20} className="text-blue-600" /> Check-in / Check-out
+              <DoorOpen size={20} className="text-blue-600" /> {t("checkInOut")}
             </h1>
-            <p className="text-[12px] text-gray-500 mt-1">Front-desk worklist — arrivals to check in and guests due to check out.</p>
+            <p className="text-[12px] text-gray-500 mt-1">{t("frontDeskSubtitle")}</p>
           </div>
           <div className="flex items-center gap-2">
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-[12px] text-gray-700 bg-white outline-none focus:border-blue-300" />
-            <button onClick={() => fetchFeed(date)}
+            {tab === "WORKLIST" ? (
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-[12px] text-gray-700 bg-white outline-none focus:border-blue-300" />
+            ) : (
+              <>
+                <input type="date" value={historyFrom} onChange={(e) => setHistoryFrom(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-[12px] text-gray-700 bg-white outline-none focus:border-blue-300" />
+                <input type="date" value={historyTo} onChange={(e) => setHistoryTo(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-[12px] text-gray-700 bg-white outline-none focus:border-blue-300" />
+              </>
+            )}
+            <button onClick={() => tab === "WORKLIST" ? fetchFeed(date) : fetchHistory()}
               className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] text-gray-600 hover:bg-gray-50">
-              <RefreshCw size={13} /> Refresh
+              <RefreshCw size={13} /> {t("refresh")}
             </button>
             <ProfileMenu />
           </div>
@@ -221,7 +273,53 @@ export default function AdminCheckInPage() {
 
         {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-[12px] text-red-600">{error}</p>}
 
-        {loading ? (
+        <div className="flex items-center gap-2 mb-5">
+          <button onClick={() => setTab("WORKLIST")}
+            className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold ${tab === "WORKLIST" ? "bg-[#0B2447] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+            {t("worklist")}
+          </button>
+          <button onClick={() => setTab("HISTORY")}
+            className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold ${tab === "HISTORY" ? "bg-[#0B2447] text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+            {t("history")}
+          </button>
+        </div>
+
+        {tab === "HISTORY" ? (
+          historyLoading ? (
+            <div className="py-16 flex justify-center"><Loader2 size={24} className="text-blue-400 animate-spin" /></div>
+          ) : history.length === 0 ? (
+            <EmptyCard text={t("noCheckHistory")} />
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="grid grid-cols-[1.1fr_1fr_0.7fr_1fr_1fr] gap-3 border-b border-gray-100 px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                <span>{t("guests")}</span><span>{t("room")}</span><span>{t("action")}</span><span>{t("time")}</span><span>{t("admin")}</span>
+              </div>
+              {history.map((h) => (
+                <div key={`${h.action}-${h.id}`} className="grid grid-cols-[1.1fr_1fr_0.7fr_1fr_1fr] gap-3 border-b border-gray-50 px-4 py-3 text-[12px] text-gray-700 last:border-b-0">
+                  <div>
+                    <p className="font-semibold text-gray-900">{h.guest}</p>
+                    <p className="text-[10px] text-gray-400 font-mono">{h.bookingId}</p>
+                  </div>
+                  <span>{h.room}{h.roomNumber ? ` · ${h.roomNumber}` : ""}</span>
+                  <span className={`font-bold ${h.action === "CHECK_IN" ? "text-green-600" : "text-indigo-600"}`}>
+                    {h.action === "CHECK_IN" ? t("checkIn") : t("checkOut")}
+                  </span>
+                  <span>{dateTime(h.timestamp)}</span>
+                  <div>
+                    <p className="font-semibold text-gray-900">{h.adminName}</p>
+                    {h.adminEmail && h.adminEmail !== h.adminName && (
+                      <p className="text-[10px] text-gray-500 truncate">{h.adminEmail}</p>
+                    )}
+                    {h.adminId && (
+                      <p className="text-[10px] text-gray-400 font-mono truncate">ID: {h.adminId}</p>
+                    )}
+                    {h.note && <p className="text-[10px] text-amber-600 truncate">{h.note}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : loading ? (
           <div className="py-16 flex justify-center"><Loader2 size={24} className="text-blue-400 animate-spin" /></div>
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -229,12 +327,12 @@ export default function AdminCheckInPage() {
             <section>
               <div className="flex items-center gap-2 mb-3">
                 <LogIn size={15} className="text-green-600" />
-                <h2 className="text-[13px] font-bold text-gray-800">Arrivals</h2>
+                <h2 className="text-[13px] font-bold text-gray-800">{t("arrivals")}</h2>
                 <span className="text-[11px] text-gray-400">({feed?.arrivals.length ?? 0})</span>
               </div>
               <div className="space-y-2.5">
                 {(feed?.arrivals.length ?? 0) === 0 ? (
-                  <EmptyCard text="No arrivals to check in" />
+                  <EmptyCard text={t("noArrivals")} />
                 ) : feed!.arrivals.map((r) => (
                   <div key={r.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center justify-between gap-3">
                     <div className="min-w-0">
@@ -251,14 +349,14 @@ export default function AdminCheckInPage() {
                           </span>
                         ) : r.paid ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-semibold">
-                            <CheckCircle2 size={10} /> Paid
+                            <CheckCircle2 size={10} /> {t("paid")}
                           </span>
                         ) : null}
                       </div>
                     </div>
                     <button onClick={() => setCheckInRow(r)}
                       className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-[12px] font-semibold">
-                      <LogIn size={14} /> Check in
+                      <LogIn size={14} /> {t("checkInAction")}
                     </button>
                   </div>
                 ))}
@@ -269,12 +367,12 @@ export default function AdminCheckInPage() {
             <section>
               <div className="flex items-center gap-2 mb-3">
                 <LogOut size={15} className="text-indigo-600" />
-                <h2 className="text-[13px] font-bold text-gray-800">In-house</h2>
+                <h2 className="text-[13px] font-bold text-gray-800">{t("inHouse")}</h2>
                 <span className="text-[11px] text-gray-400">({feed?.inHouse.length ?? 0})</span>
               </div>
               <div className="space-y-2.5">
                 {(feed?.inHouse.length ?? 0) === 0 ? (
-                  <EmptyCard text="No guests in house" />
+                  <EmptyCard text={t("noInHouse")} />
                 ) : feed!.inHouse.map((r) => (
                   <div key={r.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center justify-between gap-3">
                     <div className="min-w-0">
@@ -288,13 +386,13 @@ export default function AdminCheckInPage() {
                       </p>
                       {r.dueOut && (
                         <span className="inline-flex items-center gap-1 mt-1.5 rounded-full bg-orange-100 text-orange-700 px-2 py-0.5 text-[10px] font-semibold">
-                          Due to check out
+                          {t("dueToCheckOut")}
                         </span>
                       )}
                     </div>
                     <button disabled={busy === r.id} onClick={() => checkOut(r)}
                       className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 text-[12px] font-semibold disabled:opacity-50">
-                      {busy === r.id ? <Loader2 size={13} className="animate-spin" /> : <LogOut size={14} />} Check out
+                      {busy === r.id ? <Loader2 size={13} className="animate-spin" /> : <LogOut size={14} />} {t("checkOutAction")}
                     </button>
                   </div>
                 ))}

@@ -16,7 +16,7 @@ import { ProfileMenu } from "@/components/profile-menu"
 const REPORTS = [
   {
     icon: TrendingUp,
-    title: "ລາຍງານລາຍໄດ້",
+    title: "ລາຍງານລາຍຮັບ",
     subtitle: "Revenue — ລາຍໄດ້ລວມ, ສະເລ່ຍຕໍ່ການຈອງ ແລະ ລາຍໄດ້ລາຍວັນ",
     path: "/superadmin/reports/revenue",
     color: "bg-blue-600",
@@ -30,7 +30,7 @@ const REPORTS = [
   },
   {
     icon: ClipboardList,
-    title: "ລາຍການຈອງ",
+    title: "ລາຍງານການຈອງ",
     subtitle: "Booking List — bookings in selected range, filter &amp; export",
     path: "/superadmin/reports/booking-list",
     color: "bg-teal-500",

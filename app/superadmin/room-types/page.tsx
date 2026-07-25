@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Loader2, Plus, RefreshCw, Search, X } from "lucide-react"
 import { SuperAdminSidebar } from "@/components/superadmin-sidebar"
 import { ProfileMenu } from "@/components/profile-menu"
+import { useLanguage } from "@/components/language-provider"
 
 interface RoomType {
   id: string
@@ -47,6 +48,7 @@ function RoomTypeModal({
   onClose: () => void
   onSaved: () => void
 }) {
+  const { t } = useLanguage()
   const [form, setForm] = useState<FormState>(
     initial
       ? {
@@ -106,54 +108,54 @@ function RoomTypeModal({
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-7 relative">
         <button onClick={onClose} className="absolute top-5 right-5 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-        <h2 className="text-[16px] font-bold text-gray-900 mb-5">{mode === "add" ? "Add Room Type" : "Edit Room Type"}</h2>
+        <h2 className="text-[16px] font-bold text-gray-900 mb-5">{mode === "add" ? t("addRoomType") : t("editRoomType")}</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="text-[11px] text-gray-600 font-semibold">Type Name *</label>
+            <label className="text-[11px] text-gray-600 font-semibold">{t("typeName")} *</label>
             <input value={form.typeName} onChange={(event) => set("typeName", event.target.value)}
               className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[11px] text-gray-600 font-semibold">Base Price *</label>
+              <label className="text-[11px] text-gray-600 font-semibold">{t("basePrice")} *</label>
               <input type="number" value={form.basePrice} onChange={(event) => set("basePrice", event.target.value)}
                 className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
             </div>
             <div>
-              <label className="text-[11px] text-gray-600 font-semibold">Max Guests *</label>
+              <label className="text-[11px] text-gray-600 font-semibold">{t("maxGuests")} *</label>
               <input type="number" value={form.maxGuests} onChange={(event) => set("maxGuests", event.target.value)}
                 className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
             </div>
           </div>
           <div>
-            <label className="text-[11px] text-gray-600 font-semibold">Images (URL)</label>
+            <label className="text-[11px] text-gray-600 font-semibold">{t("imagesUrl")}</label>
             <input value={form.images} onChange={(event) => set("images", event.target.value)}
               placeholder="https://... , https://..."
               className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
             <p className="mt-1 text-[11px] text-gray-500">ໃສ່ URL ຮູບພາບ, ຄັ່ນດ້ວຍ comma (,)</p>
           </div>
           <div>
-            <label className="text-[11px] text-gray-600 font-semibold">Amenities</label>
+            <label className="text-[11px] text-gray-600 font-semibold">{t("amenities")}</label>
             <input value={form.amenities} onChange={(event) => set("amenities", event.target.value)}
               placeholder="Wifi, Pool, Breakfast"
               className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400" />
           </div>
           <div>
-            <label className="text-[11px] text-gray-600 font-semibold">Description</label>
+            <label className="text-[11px] text-gray-600 font-semibold">{t("description")}</label>
             <textarea value={form.description} onChange={(event) => set("description", event.target.value)} rows={3}
               className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 outline-none focus:border-blue-400 resize-none" />
           </div>
           <label className="flex items-center gap-2 text-[12px] text-gray-600">
             <input type="checkbox" checked={form.isActive} onChange={(event) => set("isActive", event.target.checked)} />
-            Active
+            {t("active")}
           </label>
           {error && <p className="text-[12px] text-red-500">{error}</p>}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-600 hover:bg-gray-50">Cancel</button>
+              className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-600 hover:bg-gray-50">{t("cancel")}</button>
             <button type="submit" disabled={saving}
               className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[13px] font-semibold disabled:opacity-50">
-              {saving ? "Saving..." : "Save"}
+              {saving ? t("saving") : t("save")}
             </button>
           </div>
         </form>
@@ -165,6 +167,7 @@ function RoomTypeModal({
 export default function RoomTypesPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { t } = useLanguage()
 
   const [items, setItems] = useState<RoomType[]>([])
   const [loading, setLoading] = useState(true)
@@ -200,7 +203,7 @@ export default function RoomTypesPage() {
   }, [status, fetchItems])
 
   async function deactivate(id: string) {
-    if (!confirm("Deactivate this room type?")) return
+    if (!confirm(`${t("disable")} ${t("roomType")}?`)) return
     await fetch(`/api/superadmin/room-types/${id}`, { method: "DELETE" })
     await fetchItems()
   }
@@ -220,14 +223,14 @@ export default function RoomTypesPage() {
       <main className="ml-[210px] flex-1 p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-[20px] font-bold text-gray-900">Room Type</h1>
-            <p className="text-[12px] text-gray-500 mt-1">Manage room categories and base pricing.</p>
+            <h1 className="text-[20px] font-bold text-gray-900">{t("roomType")}</h1>
+            <p className="text-[12px] text-gray-500 mt-1">{t("roomTypeSubtitle")}</p>
           </div>
           <div className="flex gap-2">
             <button onClick={fetchItems} className="p-2 bg-white border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50"><RefreshCw size={14} /></button>
             <button onClick={() => setModal({ mode: "add" })}
               className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-[12px] font-semibold">
-              <Plus size={13} /> Add Type
+              <Plus size={13} /> {t("add")}
             </button>
             <ProfileMenu />
           </div>
@@ -236,7 +239,7 @@ export default function RoomTypesPage() {
         <div className="relative mb-4 max-w-xs">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input value={search} onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search type..."
+            placeholder={t("searchType")}
             className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-[12px] text-gray-700 outline-none focus:border-blue-300" />
         </div>
 
@@ -244,14 +247,14 @@ export default function RoomTypesPage() {
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="grid grid-cols-[1fr_120px_100px_100px_100px_120px] gap-3 px-5 py-3 border-b border-gray-100 bg-gray-50/60">
-            {["Type", "Base Price", "Guests", "Rooms", "Status", ""].map((head) => (
+            {[t("type"), t("basePrice"), t("guests"), t("rooms"), t("status"), ""].map((head) => (
               <p key={head} className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{head}</p>
             ))}
           </div>
           {loading ? (
             <div className="py-16 flex justify-center"><Loader2 size={24} className="text-blue-400 animate-spin" /></div>
           ) : filtered.length === 0 ? (
-            <div className="py-16 text-center text-gray-400 text-[13px]">No room types found</div>
+            <div className="py-16 text-center text-gray-400 text-[13px]">{t("noRoomTypesFound")}</div>
           ) : (
             <div className="divide-y divide-gray-50">
               {filtered.map((item) => (
@@ -264,14 +267,14 @@ export default function RoomTypesPage() {
                   <p className="text-[12px] text-gray-500">{item.maxGuests}</p>
                   <p className="text-[12px] text-gray-500">{item._count.rooms}</p>
                   <span className={`w-fit rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                    {item.isActive ? "Active" : "Inactive"}
+                    {item.isActive ? t("active") : t("inactive")}
                   </span>
                   <div className="flex justify-end gap-2">
                     <button onClick={() => setModal({ mode: "edit", item })}
-                      className="px-3 py-1.5 rounded-lg bg-blue-50 text-[11px] font-semibold text-blue-600 hover:bg-blue-100">Edit</button>
+                      className="px-3 py-1.5 rounded-lg bg-blue-50 text-[11px] font-semibold text-blue-600 hover:bg-blue-100">{t("edit")}</button>
                     {item.isActive && (
                       <button onClick={() => deactivate(item.id)}
-                        className="px-3 py-1.5 rounded-lg bg-red-50 text-[11px] font-semibold text-red-500 hover:bg-red-100">Disable</button>
+                        className="px-3 py-1.5 rounded-lg bg-red-50 text-[11px] font-semibold text-red-500 hover:bg-red-100">{t("disable")}</button>
                     )}
                   </div>
                 </div>

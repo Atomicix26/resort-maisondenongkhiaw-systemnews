@@ -255,7 +255,6 @@ async function main() {
     console.log(`✅ Room: ${room.name} (${room.roomNumber})`)
   }
 
-  // ── ปิดการใช้งานห้อง/ประเภทห้องชุด demo เดิมที่ไม่มีอยู่จริง (soft delete, รัน seed ซ้ำได้) ──
   const legacyRoomIds = Array.from({ length: 9 }, (_, i) => `room-${i + 12}`) // room-12..room-20
   const legacyTypeIds = ["rt-standard", "rt-deluxe", "rt-suite", "rt-villa"]
   await prisma.room.updateMany({ where: { id: { in: legacyRoomIds }, deletedAt: null }, data: { isActive: false, deletedAt: new Date() } })
@@ -384,7 +383,6 @@ async function main() {
   const staffId    = actingStaff?.id ?? null
   const verifierId = adminUser.id
 
-  // ── demo customers (ให้รายงานลูกค้ามีหลายแถว) ──
   const demoCustomers = [
     { email: "somchai@example.com", name: "Somchai", lastName: "Keo",       phone: "020222001", createdDaysAgo: 60 },
     { email: "noy@example.com",     name: "Noy",     lastName: "Phabmixay", phone: "020222002", createdDaysAgo: 40 },

@@ -7,24 +7,28 @@ import {
   Activity, Users, UserCog, BedDouble, Layers, TrendingUp,
   FileBarChart, Clock, Crown, LogOut,
 } from "lucide-react"
+import { TranslationKey, useLanguage } from "@/components/language-provider"
+
+const RESORT_NAME = "Resort Maison De Nongkhiaw"
 
 // Single source of truth for the SuperAdmin navigation.
 // SuperAdmin = owner's representative: manage staff and ALL room data
 // (rooms, room types, prices) and view reports. It does NOT handle the
 // booking workflow or reviews (those belong to the Admin zone).
 const NAV = [
-  { icon: Activity,     label: "Dashboard",    path: "/superadmin/dashboard"  },
-  { icon: UserCog,      label: "Users",        path: "/superadmin/users"      },
-  { icon: Users,        label: "Staff",        path: "/superadmin/staff"      },
-  { icon: BedDouble,    label: "Rooms",        path: "/booking"               },
-  { icon: Layers,       label: "Room Type",    path: "/superadmin/room-types" },
-  { icon: TrendingUp,   label: "Price Config", path: "/superadmin/price-config" },
-  { icon: FileBarChart, label: "Reports",      path: "/superadmin/reports"    },
-  { icon: Clock,        label: "Access Logs",  path: "/superadmin/logs"       },
-]
+  { icon: Activity,     labelKey: "dashboard",    path: "/superadmin/dashboard"  },
+  { icon: UserCog,      labelKey: "users",        path: "/superadmin/users"      },
+  { icon: Users,        labelKey: "staff",        path: "/superadmin/staff"      },
+  { icon: BedDouble,    labelKey: "rooms",        path: "/booking"               },
+  { icon: Layers,       labelKey: "roomType",     path: "/superadmin/room-types" },
+  { icon: TrendingUp,   labelKey: "priceConfig",  path: "/superadmin/price-config" },
+  { icon: FileBarChart, labelKey: "reports",      path: "/superadmin/reports"    },
+  { icon: Clock,        labelKey: "accessLogs",   path: "/superadmin/logs"       },
+] satisfies { icon: React.ElementType; labelKey: TranslationKey; path: string }[]
 
 export function SuperAdminSidebar() {
-  const pathname = usePathname()
+  const pathname = usePathname() ?? ""
+  const { t } = useLanguage()
 
   return (
     <aside className="w-[210px] min-h-screen bg-[#071A33] flex flex-col justify-between fixed left-0 top-0 z-40">
@@ -34,10 +38,10 @@ export function SuperAdminSidebar() {
             <Crown size={14} className="text-amber-400" />
             <p className="text-white/60 text-[11px] uppercase tracking-wider">SuperAdmin</p>
           </div>
-          <p className="text-white font-bold text-[14px]">Resort MDNK1</p>
+          <p className="text-white font-bold text-[14px] leading-snug">{RESORT_NAME}</p>
         </div>
         <nav className="mt-3 px-3 space-y-0.5">
-          {NAV.map(({ icon: Icon, label, path }) => {
+          {NAV.map(({ icon: Icon, labelKey, path }) => {
             const active = pathname === path || pathname.startsWith(`${path}/`)
             return (
               <Link key={path} href={path}
@@ -45,7 +49,7 @@ export function SuperAdminSidebar() {
                   ${active
                     ? "bg-white/10 text-white border-l-[3px] border-amber-400"
                     : "text-white/70 hover:text-white hover:bg-white/5"}`}>
-                <Icon size={15} className="shrink-0" /> {label}
+                <Icon size={15} className="shrink-0" /> {t(labelKey)}
               </Link>
             )
           })}
@@ -53,7 +57,7 @@ export function SuperAdminSidebar() {
       </div>
       <button onClick={() => signOut({ callbackUrl: "/login" })}
         className="flex items-center gap-2 px-6 py-5 text-white/60 hover:text-white text-[12px] transition-colors border-t border-white/10">
-        <LogOut size={14} /> ອອກຈາກລະບົບ
+        <LogOut size={14} /> {t("navLogout")}
       </button>
     </aside>
   )
