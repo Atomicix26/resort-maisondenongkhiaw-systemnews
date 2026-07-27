@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import Providers from "./providers"
 import "./globals.css"
+import NotificationToasts from "@/components/notification-toasts"
 
 export const metadata: Metadata = {
   title:       "Resort Maison De Nongkhiaw",
@@ -16,7 +17,10 @@ export default function RootLayout({
   return (
     <html lang="lo" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <NotificationToasts />
+        </Providers>
       </body>
     </html>
   )

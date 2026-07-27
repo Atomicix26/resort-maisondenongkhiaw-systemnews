@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { hasRole, ADMIN_ROLES } from "@/lib/rbac"
+import broadcaster from "@/lib/notifications/broadcaster"
 import { BookingStatus, RoomStatus } from "@prisma/client"
 import { saveImageUpload } from "@/lib/upload"
 import { nextId } from "@/lib/ids"
@@ -192,6 +193,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
       return b
     })
+
+    // Emit notification for connected clients (in-memory broadcaster)
+    try {
+      broadcaster.send("notification", { type: "booking_update", data: updated })
+    } catch (err) {
+      console.error("Failed to broadcast booking update", err)
+    }
 
     return NextResponse.json(updated)
   } catch (error) {
