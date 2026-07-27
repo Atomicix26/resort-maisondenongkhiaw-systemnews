@@ -34,3 +34,29 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Notifications (development)
+
+This project includes a simple Server-Sent Events (SSE) notification system for local testing.
+
+- Subscribe: `GET /api/notifications/subscribe` — client uses `EventSource` to receive events.
+- Emit (dev-only): `POST /api/notifications/emit` — send JSON `{ "type": "your_type", "data": {...} }` to broadcast to connected clients.
+
+Quick test using `curl` (subscribe in one terminal):
+
+```bash
+curl -N http://localhost:3000/api/notifications/subscribe
+```
+
+Emit a test notification (another terminal):
+
+```bash
+curl -X POST http://localhost:3000/api/notifications/emit \
+	-H "Content-Type: application/json" \
+	-d '{"type":"booking_update","data":{"message":"Test notification from dev"}}'
+```
+
+Or open the app in a browser (dev) — a toast UI is mounted globally and will display incoming notifications.
+
+Note: The `emit` endpoint is intended for development/testing only. For production, integrate real event emission where application logic changes occur (e.g., after booking updates) and secure access.
+
