@@ -1,17 +1,17 @@
 "use client"
 import { useState, useCallback } from "react"
-import useNotifications from "@/lib/notifications/useNotifications"
+import useNotifications, { type Payload } from "@/lib/notifications/useNotifications"
 
 type Toast = { id: string; title: string; body?: string }
 
 export default function NotificationToasts() {
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  const onEvent = useCallback((payload: any) => {
+  const onEvent = useCallback((payload: Payload) => {
     const t: Toast = {
       id: `${Date.now()}-${Math.random()}`,
       title: payload.type ?? "notification",
-      body: payload.data?.message ?? payload.data?.id ?? JSON.stringify(payload.data ?? "")
+      body: (payload.data?.message as string) ?? (payload.data?.id as string) ?? JSON.stringify(payload.data ?? "")
     }
     setToasts((s) => [t, ...s].slice(0, 5))
     // auto-remove after 6s
