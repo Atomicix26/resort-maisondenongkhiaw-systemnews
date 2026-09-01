@@ -1,9 +1,12 @@
 "use client"
 import { useEffect, useRef } from "react"
 
-type Payload = { type: string; data: any }
+interface NotificationPayload {
+  type: string
+  data?: Record<string, unknown>
+}
 
-export default function useNotifications(onEvent: (p: Payload) => void) {
+export default function useNotifications(onEvent: (p: NotificationPayload) => void) {
   const onEventRef = useRef(onEvent)
   onEventRef.current = onEvent // เก็บ callback ล่าสุดไว้ ไม่ต้องพึ่ง dependency
 

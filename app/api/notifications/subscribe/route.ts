@@ -18,13 +18,13 @@ export async function GET() {
         }
       }
 
-      const send = (payload: any) => {
+      const send = (payload: NotificationPayload) => {
         const eventName = typeof payload?.type === "string" ? payload.type : "message"
         const s = `event: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`
         safeEnqueue(enc.encode(s))
       }
 
-      const listener = (data: any) => send(data)
+      const listener = (data: NotificationPayload) => send(data)
 
       broadcaster.on("notification", listener)
       broadcaster.on("booking_update", listener)

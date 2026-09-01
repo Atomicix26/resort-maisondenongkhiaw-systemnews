@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { CheckCircle2, Bell } from "lucide-react"
+import { CheckCircle2 } from "lucide-react"
 import useNotifications from "@/lib/notifications/useNotifications"
 
 type Toast = { id: string; type: string; lo?: string; en?: string }
@@ -14,7 +14,7 @@ const TRANSLATIONS: Record<string, { lo: string; en: string; variant?: "success"
 export default function NotificationToasts() {
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  const showToast = useCallback((payload: any) => {
+  const showToast = useCallback((payload:  NotificationPayload) => {
     const type = payload.type ?? "notification"
     const map = TRANSLATIONS[type] ?? TRANSLATIONS.notification
 
