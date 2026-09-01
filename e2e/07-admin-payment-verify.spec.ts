@@ -16,6 +16,7 @@ test.describe.serial("Admin verify payment notification", () => {
     const customerContext = await page.context().browser().newContext()
     const customerPage = await customerContext.newPage()
     await customerPage.goto("/")
+    // SSE connection never idles (long-lived stream), so wait for the request instead
     await customerPage.waitForRequest((request) => request.url().endsWith("/api/notifications/subscribe") && request.method() === "GET")
 
     const response = await page.evaluate(async (txId) => {
@@ -33,6 +34,8 @@ test.describe.serial("Admin verify payment notification", () => {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'booking_update', data: { messageLo: 'ການຈອງຖືກຢືນຢັນແລ້ວ', messageEn: 'Booking confirmed' } }),
       }))
+      // Give the broadcaster a moment to send the event
+      await page.waitForTimeout(500)
     }
 
     await expect(customerPage.getByText(/ການຈອງຖືກຢືນຢັນແລ້ວ|Booking confirmed/i).first()).toBeVisible({ timeout: 15000 })

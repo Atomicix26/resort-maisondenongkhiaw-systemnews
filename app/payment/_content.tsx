@@ -74,7 +74,7 @@ function PriceDisplay({ lak, currency }: { lak: number; currency: Currency }) {
 // ─────────────────────────────────────────────────────────────────
 export default function PaymentContent() {
   const router  = useRouter()
-  const params  = useSearchParams()
+  const params  = useSearchParams()!
   const { status } = useSession()
 
   const roomId   = params.get("roomId")   ?? ""
@@ -158,7 +158,7 @@ export default function PaymentContent() {
     if (!room || days <= 0) { setError("ວັນທີບໍ່ຖືກຕ້ອງ"); return }
     setError(""); setLoading(true)
     
-    const toastId = toast.loading("ກຳລັງສ້າងການຈອງ...", {
+    const toastId = toast.loading("ກຳລັງສ້າງການຈອງ...", {
       description: "Creating your booking...",
     })
     

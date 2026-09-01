@@ -1,40 +1,38 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { CheckCircle2 } from "lucide-react"
-import type { NotificationPayload } from "@/lib/notifications/useNotifications"
+import { CheckCircle2, Bell } from "lucide-react"
 import useNotifications from "@/lib/notifications/useNotifications"
 
-interface Toast {
-  id: string
-  type: string
-  lo: string
-  en: string
-}
+type Toast = { id: string; type: string; lo?: string; en?: string }
 
-const TRANSLATIONS: Record<string, any> = {
-  // Add your translation mappings here
-  notification: { /* ... */ },
+const TRANSLATIONS: Record<string, { lo: string; en: string; variant?: "success" | "info" | "error" }> = {
+  booking_update: { lo: "ການຈອງຖືກຢືນຢັນແລ້ວ", en: "Booking confirmed", variant: "success" },
+  notification:   { lo: "ແຈ້ງເຕືອນ", en: "Notification", variant: "info" },
 }
 
 export default function NotificationToasts() {
   const [toasts, setToasts] = useState<Toast[]>([])
 
-  const showToast = useCallback((payload: NotificationPayload) => {
+  const showToast = useCallback((payload: any) => {
     const type = payload.type ?? "notification"
     const map = TRANSLATIONS[type] ?? TRANSLATIONS.notification
-    
-    const lo = (payload.data?.messageLo ?? ((payload.data?.message && /[\u0E00-\u0E7F]/.test(payload.data?.message as string)) ? payload.data.message : "")) as string
-    const en = (payload.data?.messageEn ?? ((payload.data?.message && !/[\u0E00-\u0E7F]/.test(payload.data?.message as string)) ? payload.data.message : "")) as string
-    
+
+    // prefer explicit translations in payload.data if present
+    const lo = payload.data?.messageLo ?? (payload.data?.message && /[\u0E00-\u0E7F\u0E80-\u0EFF]/.test(payload.data.message) ? payload.data.message : map.lo)
+    const en = payload.data?.messageEn ?? (payload.data?.message && !(/[\u0E00-\u0E7F\u0E80-\u0EFF]/.test(payload.data.message)) ? payload.data.message : map.en)
+
     const t: Toast = {
       id: `${Date.now()}-${Math.random()}`,
       type,
       lo,
       en,
     }
-    
-    setToasts(prev => [...prev, t])
+
+    setToasts((s) => [t, ...s].slice(0, 3))
+
+    // auto-remove after 6s
+    setTimeout(() => setToasts((s) => s.filter(x => x.id !== t.id)), 6000)
   }, [])
 
   useNotifications(showToast)

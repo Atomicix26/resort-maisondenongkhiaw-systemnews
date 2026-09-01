@@ -1,62 +1,44 @@
 "use client"
-import { useEffect, useRef } from "react"
+import { useEffect } from "react"
 
-export interface NotificationPayload {
-  type: string
-  data?: Record<string, unknown>
-}
+type Payload = { type: string; data?: Record<string, unknown> }
 
-
-export default function useNotifications(onEvent: (p: NotificationPayload) => void) {
-  const onEventRef = useRef(onEvent)
-  onEventRef.current = onEvent // เก็บ callback ล่าสุดไว้ ไม่ต้องพึ่ง dependency
-
+export default function useNotifications(onEvent: (p: Payload) => void) {
   useEffect(() => {
-    onEventRef.current = onEvent
+    const es = new EventSource("/api/notifications/subscribe")
     
-    let es: EventSource | null = null
-    let retryTimeout: ReturnType<typeof setTimeout> | null = null
-    let retryDelay = 1000 // เริ่มที่ 1s แล้ว backoff แบบ exponential
-    let stopped = false
-
-    const handleEvent = (ev: MessageEvent) => {
+    // Listen to generic messages
+    es.onmessage = (ev) => {
       try {
         const payload = JSON.parse(ev.data)
-        onEventRef.current(payload)
+        onEvent(payload)
       } catch (err) {
         console.error("Invalid notification payload", err)
       }
     }
 
-    const connect = () => {
-      es = new EventSource("/api/notifications/subscribe")
-
-      es.onopen = () => {
-        retryDelay = 1000 // reset delay เมื่อเชื่อมต่อสำเร็จ
-        console.debug("notifications: connected")
-      }
-
-      es.onmessage = handleEvent
-      es.addEventListener("notification", handleEvent)
-      es.addEventListener("booking_update", handleEvent)
-
-      es.onerror = () => {
-        es?.close()
-        if (stopped) return
-        // reconnect แบบ exponential backoff (สูงสุด 30s)
-        retryTimeout = setTimeout(() => {
-          retryDelay = Math.min(retryDelay * 2, 30000)
-          connect()
-        }, retryDelay)
+    // Listen to specific event types sent by server
+    const handleEvent = (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data)
+        onEvent(payload)
+      } catch (err) {
+        console.error("Invalid notification payload", err)
       }
     }
 
-    connect()
+    es.addEventListener("notification", handleEvent)
+    es.addEventListener("booking_update", handleEvent)
+    
+    es.onerror = (e) => {
+      console.error("SSE error", e)
+      es.close()
+    }
 
     return () => {
-      stopped = true
-      if (retryTimeout) clearTimeout(retryTimeout)
-      es?.close()
+      es.removeEventListener("notification", handleEvent)
+      es.removeEventListener("booking_update", handleEvent)
+      es.close()
     }
-  }, []) // ไม่ผูกกับ onEvent แล้ว เชื่อมต่อครั้งเดียวตอน mount
+  }, [onEvent])
 }
