@@ -11,7 +11,6 @@ import {
   CreditCard, Banknote, ArrowLeft, Loader2, X, Star, FileText, Upload,
 } from "lucide-react"
 import { computeRefund, REFUND_POLICY } from "@/lib/refund"
-import { useLanguage } from "@/components/language-provider"
 
 // ── Types ────────────────────────────────────────────────────────
 interface Transaction {
@@ -290,7 +289,6 @@ function ReviewModal({ booking, onClose, onDone }: {
   onClose: () => void
   onDone:  () => void
 }) {
-  const { t } = useLanguage()
   const [rating,  setRating]  = useState(booking.review?.rating ?? 5)
   const [comment, setComment] = useState(booking.review?.comment ?? "")
   const [loading, setLoading] = useState(false)
@@ -298,7 +296,7 @@ function ReviewModal({ booking, onClose, onDone }: {
 
   async function handleSubmit() {
     if (rating < 1 || rating > 5) {
-      setError(t("ratingError"))
+      setError("Rating must be between 1 and 5")
       return
     }
 
@@ -316,12 +314,12 @@ function ReviewModal({ booking, onClose, onDone }: {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error ?? t("reviewSubmitError"))
+        setError(data.error ?? "Failed to submit review")
         return
       }
       onDone()
     } catch {
-      setError(t("reviewSubmitError"))
+      setError("Failed to submit review")
     } finally {
       setLoading(false)
     }
@@ -339,7 +337,7 @@ function ReviewModal({ booking, onClose, onDone }: {
             <Star size={18} className="text-amber-500 fill-amber-400" />
           </div>
           <div>
-            <h3 className="text-[15px] font-bold text-gray-900">{t("reviewStay")}</h3>
+            <h3 className="text-[15px] font-bold text-gray-900">Review your stay</h3>
             <p className="text-[11px] text-gray-500">{booking.room.name} - {fmtDate(booking.checkIn)}</p>
           </div>
         </div>
@@ -365,7 +363,7 @@ function ReviewModal({ booking, onClose, onDone }: {
           value={comment}
           onChange={(event) => setComment(event.target.value)}
           rows={4}
-          placeholder={t("tellUsAboutStay")}
+          placeholder="Tell us about your stay..."
           className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-[13px] outline-none focus:border-amber-300 resize-none mb-4"
         />
 
@@ -376,7 +374,7 @@ function ReviewModal({ booking, onClose, onDone }: {
             onClick={onClose}
             className="flex-1 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-600 hover:bg-gray-50 transition-all"
           >
-            {t("cancel")}
+            Cancel
           </button>
           <button
             onClick={handleSubmit}
@@ -384,7 +382,7 @@ function ReviewModal({ booking, onClose, onDone }: {
             className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[13px] font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Star size={14} />}
-            {t("submit")}
+            Submit
           </button>
         </div>
       </div>
@@ -397,7 +395,6 @@ function BookingCard({ booking, onCancel, onReview }: {
   onCancel: () => void
   onReview: () => void
 }) {
-  const { t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
   const bCfg  = bookingStatusCfg[booking.status]  ?? bookingStatusCfg.PENDING
   const pCfg  = paymentStatusCfg[booking.paymentStatus] ?? paymentStatusCfg.PENDING
@@ -421,7 +418,7 @@ function BookingCard({ booking, onCancel, onReview }: {
 
         {/* Room image */}
         <div className="relative w-28 h-28 flex-shrink-0 sm:w-36 sm:h-36">
-          <Image src={cover} alt={booking.room.name} fill sizes="(max-width: 640px) 7rem, 9rem" className="object-cover"
+          <Image src={cover} alt={booking.room.name} fill className="object-cover"
             onError={(e) => { (e.target as HTMLImageElement).src = "/room.png" }} />
         </div>
 
@@ -487,7 +484,7 @@ function BookingCard({ booking, onCancel, onReview }: {
                 <button onClick={onReview}
                   className="inline-flex items-center gap-1 text-[11px] border border-amber-200 text-amber-600 hover:bg-amber-50 px-3 py-1.5 rounded-lg font-medium transition-all">
                   <Star size={11} className={booking.review ? "fill-amber-400" : ""} />
-                  {booking.review ? t("editReview") : t("review")}
+                  {booking.review ? "Edit review" : "Review"}
                 </button>
               )}
               {/* Expand details */}
@@ -539,17 +536,6 @@ function BookingCard({ booking, onCancel, onReview }: {
                         <p className="text-[11px] text-gray-500">
                           {tx.paymentDate ? fmtDate(tx.paymentDate) : "ຍັງບໍ່ຊຳລະ"}
                         </p>
-                        {tx.slipImage && (
-                          <a
-                            href={`/api/slips/${encodeURIComponent(tx.slipImage)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700"
-                          >
-                            <FileText size={11} />
-                            {tx.type === "REFUND" ? "View refund slip" : "View slip"}
-                          </a>
-                        )}
                       </div>
                     </div>
                     <div className="text-right">

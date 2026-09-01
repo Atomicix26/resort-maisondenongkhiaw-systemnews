@@ -1,98 +1,140 @@
-import { Resend } from "resend"
+import nodemailer from 'nodemailer';
 
-// lazy init: สร้าง client ตอนถูกเรียกใช้จริงเท่านั้น
-// กัน crash ตอน import module ถ้า RESEND_API_KEY ยังไม่ถูกตั้ง (เช่นตอนรัน test/CI)
-let resendClient: Resend | null = null
-
-function getResendClient(): Resend {
-  if (!resendClient) {
-    const apiKey = process.env.RESEND_API_KEY
-    if (!apiKey) {
-      throw new Error("RESEND_API_KEY is not set")
-    }
-    resendClient = new Resend(apiKey)
-  }
-  return resendClient
+export interface SendMailParams {
+  to: string;
+  subject: string;
+  html: string;
 }
 
-export async function sendOtpEmail(to: string, otp: string) {
-  const resend = getResendClient()
-  await resend.emails.send({
-    from: "Resort MDNK1 <noreply@yourdomain.com>",
-    to,
-    subject: "ລະຫັດ OTP ສຳລັບຣີເຊັດລະຫັດຜ່ານ",
-    html: `
-      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2>Resort MDNK1</h2>
-        <p>ລະຫັດ OTP ຂອງທ່ານແມ່ນ:</p>
-        <p style="font-size: 32px; font-weight: bold; letter-spacing: 4px;">
-          ${otp}
-        </p>
-        <p style="color: #666; font-size: 14px;">
-          ລະຫັດນີ້ຈະໝົດອາຍຸໃນ 5 ນາທີ. ຖ້າທ່ານບໍ່ໄດ້ຮ້ອງຂໍ ກະລຸນາລະເວັ້ນອີເມວນີ້.
-        </p>
-      </div>
-    `,
-  })
-}
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
 
-export async function sendBookingConfirmation({
+export async function sendNotificationEmail({
   to,
+  subject,
+  html,
+}: SendMailParams) {
+  try {
+    const info = await transporter.sendMail({
+      // 1. เปลี่ยนชื่อผู้ส่งตรงนี้
+      from: `"Maison de Nongkhiaw Resort" <${process.env.GMAIL_USER}>`,
+      to,
+      subject,
+      html,
+    });
+
+    console.log('Email sent successfully ID:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('Error sending email via Nodemailer:', error);
+    return { success: false, error };
+  }
+}
+
+export { sendNotificationEmail as sendBookingConfirmation };
+
+// 2. Helper สรรสร้าง HTML Template สวยงามสไตล์โรงแรม (2 ภาษา: ลาว + อังกฤษ)
+export function generatePaymentVerifyEmailHtml({
   customerName,
   bookingId,
-  roomName,
-  checkIn,
-  checkOut,
-  guests,
-  totalPrice,
+  isPaid,
+  reason,
 }: {
-  to: string
-  customerName: string
-  bookingId: string
-  roomName: string
-  checkIn: string
-  checkOut: string
-  guests: number
-  totalPrice: number
+  customerName: string;
+  bookingId: string;
+  isPaid: boolean;
+  reason?: string;
 }) {
-  const resend = getResendClient()
-  await resend.emails.send({
-    from: "Resort Maison De Nongkhiaw <noreply@yourdomain.com>",
-    to,
-    subject: "🎉 Booking Confirmation",
+  const statusColor = isPaid ? '#10b981' : '#ef4444';
+  const statusTextLao = isPaid ? 'ການຊໍາລະເງິນຖືກຢືນຢັນແລ້ວ' : 'ການຊໍາລະເງິນບໍ່ຜ່ານການຢືນຢັນ';
+  const statusTextEng = isPaid ? 'Payment Confirmed' : 'Payment Failed';
 
-    html: `
-      <div style="font-family:Arial,sans-serif">
+  return `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  </head>
+  <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px 0;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 600px; width: 100%;">
+            
+            <!-- Header Banner -->
+            <tr>
+              <td style="background-color: #1e293b; padding: 30px; text-align: center; color: #ffffff;">
+                <h1 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: 1px;">MAISON DE NONGKHIAW</h1>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #94a3b8; letter-spacing: 2px; text-transform: uppercase;">Luxury Resort & Retreat</p>
+              </td>
+            </tr>
 
-      <h2>🏨 Resort Maison De Nongkhiaw</h2>
+            <!-- Status Badge -->
+            <tr>
+              <td style="padding: 30px 30px 10px 30px; text-align: center;">
+                <div style="display: inline-block; background-color: ${isPaid ? '#ecfdf5' : '#fef2f2'}; border: 1px solid ${statusColor}; padding: 8px 18px; border-radius: 50px;">
+                  <span style="color: ${statusColor}; font-weight: 600; font-size: 14px;">
+                    ${statusTextLao} / ${statusTextEng}
+                  </span>
+                </div>
+              </td>
+            </tr>
 
-      <h3>Booking Confirmation</h3>
+            <!-- Body Content -->
+            <tr>
+              <td style="padding: 20px 30px; color: #334155; line-height: 1.6;">
+                <p style="font-size: 16px; font-weight: 600; margin-bottom: 5px;">
+                  ສະບາຍດີ / Dear ${customerName || 'Valued Guest'},
+                </p>
+                
+                ${
+                  isPaid
+                    ? `<p style="margin-top: 0;">
+                        ບັນຊີຊໍາລະຂອງທ່ານສໍາລັບການຈອງ <strong>#${bookingId}</strong> ໄດ້ຮັບການຢືນຢັນຮຽບຮ້ອຍແລ້ວ. ພວກເຂົາເຈົ້າມີຄວາມຍິນດີທີ່ຈະຕ້ອນຮັບທ່ານ.<br>
+                        <span style="color: #64748b; font-size: 14px;">Your payment for booking <strong>#${bookingId}</strong> has been successfully verified. We look forward to welcoming you!</span>
+                       </p>`
+                    : `<p style="margin-top: 0;">
+                        ການຊໍາລະເງິນສໍາລັບການຈອງ <strong>#${bookingId}</strong> ບໍ່ຜ່ານການຢືນຢັນ.<br>
+                        <span style="color: #64748b; font-size: 14px;">Your payment verification for booking <strong>#${bookingId}</strong> was unsuccessful.</span>
+                       </p>
+                       <div style="background-color: #fff1f2; border-left: 4px solid #f43f5e; padding: 12px 15px; margin: 15px 0; border-radius: 4px;">
+                         <strong style="color: #9f1239;">ເຫດຜົນ / Reason:</strong> ${reason}
+                       </div>`
+                }
 
-      <p>Hello <b>${customerName}</b></p>
+                <!-- Booking Summary Card -->
+                <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f8fafc; border-radius: 8px; margin: 20px 0; padding: 15px;">
+                  <tr>
+                    <td style="padding: 8px; font-size: 14px; color: #64748b;">Booking Reference:</td>
+                    <td style="padding: 8px; font-size: 14px; font-weight: 600; color: #0f172a; text-align: right;">#${bookingId}</td>
+                  </tr>
+                </table>
 
-      <p>Your booking has been received.</p>
+                <p style="font-size: 14px; color: #64748b; text-align: center; margin-top: 25px;">
+                  ຫາກມີຂໍ້ສົງໄສ ກະລຸນາຕິດຕໍ່ທີມງານຂອງພວກເຮົາ.<br>If you have any questions, feel free to contact us.
+                </p>
+              </td>
+            </tr>
 
-      <hr>
+            <!-- Footer -->
+            <tr>
+              <td style="background-color: #f1f5f9; padding: 20px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
+                <p style="margin: 0 0 5px 0; font-weight: 600; color: #64748b;">Maison de Nongkhiaw Resort</p>
+                <p style="margin: 0;">Nongkhiaw, Luang Prabang, Lao PDR</p>
+              </td>
+            </tr>
 
-      <p><b>Booking ID :</b> ${bookingId}</p>
-
-      <p><b>Room :</b> ${roomName}</p>
-
-      <p><b>Check In :</b> ${checkIn}</p>
-
-      <p><b>Check Out :</b> ${checkOut}</p>
-
-      <p><b>Guests :</b> ${guests}</p>
-
-      <p><b>Total :</b> ${totalPrice.toLocaleString()} Kip</p>
-
-      <hr>
-
-      <p style="color:orange;font-weight:bold">
-      Status : Waiting for Confirmation
-      </p>
-
-      </div>
-    `,
-  })
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+  </html>
+  `;
 }

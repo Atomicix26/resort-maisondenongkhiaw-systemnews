@@ -27,7 +27,8 @@ type Step      = "confirm" | "pay" | "success"
 type PayMethod = "transfer" | "pay_at_hotel"
 type Currency  = "LAK" | "USD" | "THB"
 
-
+// ── Exchange rates (approximate — สำหรับ display เท่านั้น)
+// Production: ควรดึงจาก API เช่น exchangerate-api.com
 const RATES: Record<Currency, number> = {
   LAK: 1,
   USD: 1 / 21500,  // 1 USD ≈ 21,500 LAK
@@ -76,12 +77,12 @@ export default function PaymentContent() {
   const params  = useSearchParams()
   const { status } = useSession()
 
-  const roomId   = params?.get("roomId")   ?? ""
-  const checkIn  = params?.get("checkIn")  ?? ""
-  const checkOut = params?.get("checkOut") ?? ""
+  const roomId   = params.get("roomId")   ?? ""
+  const checkIn  = params.get("checkIn")  ?? ""
+  const checkOut = params.get("checkOut") ?? ""
   // ── มาจากหน้าประวัติ: ชำระ booking ที่มีอยู่แล้ว → ข้ามขั้น "ยืนยัน"
   //    (ไม่สร้าง booking ซ้ำ ซึ่งจะไปชนกับ booking ค้างของตัวเองใน conflict-check)
-  const existingBookingId = params?.get("bookingId") ?? ""
+  const existingBookingId = params.get("bookingId") ?? ""
 
   const [room,        setRoom]        = useState<Room | null>(null)
   const [loadRoom,    setLoadRoom]    = useState(true)
@@ -569,7 +570,7 @@ export default function PaymentContent() {
                       <div className="text-[12px] space-y-1">
                         <p className="text-gray-600">ທະນາຄານ / Bank: <span className="font-semibold text-gray-900">BCEL</span></p>
                         <p className="text-gray-600">ເລກບັນຊີ / Account: <span className="font-mono font-semibold text-gray-900">0123-456-789</span></p>
-                        <p className="text-gray-600">ຊື່ / Name: <span className="font-semibold text-gray-900">Resort Maison De Nongkhiaw</span></p>
+                        <p className="text-gray-600">ຊື່ / Name: <span className="font-semibold text-gray-900">Resort MDNK1</span></p>
                         <p className="text-gray-500 text-[11px]">* ສາມາດໂອນ USD/THB ໄດ້ / USD/THB accepted</p>
                       </div>
                     </div>
@@ -660,7 +661,7 @@ export default function PaymentContent() {
             </p>
 
             <div className="relative h-36 w-full rounded-xl overflow-hidden mb-4 shadow-sm">
-              <Image src={getRoomCover(room)} alt={room.name} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover"
+              <Image src={getRoomCover(room)} alt={room.name} fill className="object-cover"
                 onError={(e) => { (e.target as HTMLImageElement).src = "/room.png" }}/>
             </div>
 
