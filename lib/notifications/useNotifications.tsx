@@ -1,7 +1,7 @@
 "use client"
 import { useEffect } from "react"
 
-type Payload = { type: string; data: any }
+type Payload = { type: string; data?: Record<string, unknown> }
 
 export default function useNotifications(onEvent: (p: Payload) => void) {
   useEffect(() => {
