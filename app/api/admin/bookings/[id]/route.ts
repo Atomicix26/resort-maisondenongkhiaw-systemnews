@@ -196,7 +196,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
     // Emit notification for connected clients (in-memory broadcaster)
     try {
-      broadcaster.send("notification", { type: "booking_update", data: updated })
+      broadcaster.send("notification", {
+        type: "booking_update",
+        data: {
+          ...updated,
+          message: status === "CONFIRMED"
+            ? "Booking confirmed"
+            : status === "CANCELLED"
+              ? "Booking cancelled"
+              : `Booking status updated to ${status}`,
+        },
+      })
     } catch (err) {
       console.error("Failed to broadcast booking update", err)
     }

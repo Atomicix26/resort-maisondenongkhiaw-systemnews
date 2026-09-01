@@ -4,17 +4,18 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { hasRole, ADMIN_ROLES } from "@/lib/rbac"
 import { PaymentStatus } from "@prisma/client"
+import { sendNotificationEmail, generatePaymentVerifyEmailHtml } from "@/lib/mail" // นำเข้า generator
+import broadcaster from "@/lib/notifications/broadcaster"
 
 type Params = { params: Promise<{ id: string }> }
 
-// PATCH /api/admin/payments/[id]/verify
 export async function PATCH(request: NextRequest, { params }: Params) {
   const { id } = await params
 
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    // allowlist: เฉพาะ ADMIN / SUPERADMIN เท่านั้น (ไม่ใช้ denylist)
+    
     if (!hasRole(session.user.role, ADMIN_ROLES)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
@@ -24,7 +25,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "status ຕ້ອງເປັນ PAID ຫຼື FAILED" }, { status: 400 })
     }
 
-    // ปฏิเสธ (FAILED) ต้องระบุเหตุผล — audit trail (BUG-002)
     const trimmedReason = typeof reason === "string" ? reason.trim() : ""
     if (status === "FAILED" && !trimmedReason) {
       return NextResponse.json({ error: "ກະລຸນາລະບຸເຫດຜົນໃນການປະຕິເສດ" }, { status: 400 })
@@ -38,7 +38,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         select: { id: true, status: true, bookingId: true, booking: { select: { status: true } } },
       })
       if (!existing) throw new Error("NOT_FOUND")
-      // กัน verify ซ้ำรายการที่ตัดสินไปแล้ว
+      
       if (existing.status === "PAID" || existing.status === "FAILED") {
         throw new Error("ALREADY_VERIFIED")
       }
@@ -49,14 +49,18 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           status:           status as PaymentStatus,
           reason:           status === "FAILED" ? trimmedReason : null,
           verifiedById:     staff?.id ?? null,
-          verifiedByUserId: session.user.id,   // actor เสมอ แม้ไม่มี Staff profile
+          verifiedByUserId: session.user.id,
           verifiedAt:       new Date(),
         },
-        include: { booking: { select: { id: true, status: true } } },
+        include: {
+          booking: {
+            include: {
+              user: { select: { email: true, name: true } },
+            },
+          },
+        },
       })
 
-      // ถ้า PAID → auto confirm booking ถ้ายัง PENDING (อยู่ใน transaction เดียวกัน)
-      // ล้าง expiresAt ด้วย — ยืนยันแล้วไม่มีกำหนดชำระอีก (กันหน้า payment ขึ้น "หมดเวลา" ผิด)
       if (status === "PAID" && existing.booking.status === "PENDING") {
         await txc.booking.update({
           where: { id: existing.bookingId },
@@ -66,6 +70,47 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
       return updated
     })
+
+    // ส่งอีเมลแบบสวยงาม (2 ภาษา + Sender Name เป็น Maison de Nongkhiaw)
+    const customerEmail = tx.booking?.user?.email
+    if (customerEmail) {
+      const isPaid = tx.status === "PAID"
+      const emailSubject = isPaid
+        ? `Payment Confirmation / ການຢືນຢັນການຊໍາລະເງິນ (#${tx.bookingId})`
+        : `Payment Status Update / ແຈ້ງສະຖານະການຊໍາລະເງິນ (#${tx.bookingId})`
+
+      // สร้าง HTML จาก Template ที่ออกแบบไว้
+      const emailContent = generatePaymentVerifyEmailHtml({
+        customerName: tx.booking.user.name || '',
+        bookingId: tx.bookingId,
+        isPaid,
+        reason: trimmedReason,
+      })
+
+      try {
+        await sendNotificationEmail({
+          to: customerEmail,
+          subject: emailSubject,
+          html: emailContent,
+        });
+      } catch (err) {
+        console.error("[PAYMENT_VERIFY_EMAIL_ERROR]", err);
+      }
+    }
+
+    try {
+      broadcaster.send("notification", {
+        type: "booking_update",
+        data: {
+          bookingId: tx.bookingId,
+          message: tx.status === "PAID"
+            ? "ການຈອງຖືກຢືນຢັນແລ້ວ"
+            : "ການຊໍາລະເງິນບໍ່ຜ່ານການຢືນຢັນ",
+        },
+      })
+    } catch (err) {
+      console.error("Failed to broadcast payment verify update", err)
+    }
 
     return NextResponse.json(tx)
   } catch (error) {

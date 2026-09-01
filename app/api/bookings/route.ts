@@ -12,7 +12,7 @@ import {
 } from "@/lib/ratelimit";
 import { expireStaleBookings, paymentDeadline } from "@/lib/expire";
 import { nextId } from "@/lib/ids";
-import { sendBookingConfirmation } from "@/lib/mail";
+import { sendNotificationEmail } from "@/lib/mail";
 
 // type ของผลลัพธ์ transaction — ใช้แทน unknown/any
 type BookingWithRelations = Prisma.BookingGetPayload<{
@@ -233,8 +233,21 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      await sendBookingConfirmation({
+      await sendNotificationEmail({
         to: result.booking.user.email,
+        subject: `ການຢືນຢັນການຈອງ #${result.booking.id}`,
+        html: `
+          <p>ສະບາຍດີ ${result.booking.user.name ?? "ລູກຄ້າ"},</p>
+          <p>ການຈອງຂອງທ່ານໄດ້ຖືກຢືນຢັນແລ້ວ:</p>
+          <ul>
+            <li>ເລກການຈອງ: ${result.booking.id}</li>
+            <li>ຫ້ອງ: ${result.booking.room.name}</li>
+            <li>ວັນເຂົ້າ: ${result.booking.checkIn.toLocaleDateString()}</li>
+            <li>ວັນອອກ: ${result.booking.checkOut.toLocaleDateString()}</li>
+            <li>ເປັນຜູ້ເຂົ້າ: ${result.booking.guests}</li>
+            <li>ລາຄາລວມ: ${Number(result.booking.totalPrice)}</li>
+          </ul>
+        `,
         customerName: result.booking.user.name ?? "ລູກຄ້າ",
         bookingId: result.booking.id,
         roomName: result.booking.room.name,
