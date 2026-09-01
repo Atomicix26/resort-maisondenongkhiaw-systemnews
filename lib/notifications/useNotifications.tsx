@@ -1,16 +1,19 @@
 "use client"
 import { useEffect, useRef } from "react"
 
-interface NotificationPayload {
+export interface NotificationPayload {
   type: string
   data?: Record<string, unknown>
 }
+
 
 export default function useNotifications(onEvent: (p: NotificationPayload) => void) {
   const onEventRef = useRef(onEvent)
   onEventRef.current = onEvent // เก็บ callback ล่าสุดไว้ ไม่ต้องพึ่ง dependency
 
   useEffect(() => {
+    onEventRef.current = onEvent
+    
     let es: EventSource | null = null
     let retryTimeout: ReturnType<typeof setTimeout> | null = null
     let retryDelay = 1000 // เริ่มที่ 1s แล้ว backoff แบบ exponential
